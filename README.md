@@ -16,8 +16,9 @@ buscar: oak                          2 items  cant
 
 ## Armado en el juego
 
-1. Una **Advanced Computer** con un modem cableado pegado (el mouse y los colores
-   solo andan en las advanced).
+1. Una **Advanced Computer** con un modem cableado pegado. En una computadora
+   normal el programa anda igual, pero **sin mouse ni colores**: CC solo manda
+   eventos de click en las advanced. Todo se puede hacer con el teclado.
 2. Un **modem cableado** en cada cofre, activado con click derecho (se ilumina).
 3. **Networking cable** uniendo todo.
 4. Dos cofres mas de la misma red: uno de entrada y uno de salida.
@@ -49,8 +50,9 @@ por vos. Se puede volver a abrir con **F9**.
 | flechas / RePag / AvPag | mover la seleccion |
 | enter | pedir: abre el dialogo de cantidad |
 | tab | detalle del item: en que cofres esta y cuantos slots ocupa |
-| click | seleccionar; click de nuevo pide |
-| click derecho | pedir todo el stock de ese item |
+| click | seleccionar; click de nuevo pide (solo Advanced Computer) |
+| click derecho | pedir todo el stock de ese item (idem) |
+| a (en el dialogo) | poner todo el stock como cantidad |
 | ctrl+u | limpiar la busqueda |
 | F1 | ayuda |
 | F2 | ordenar por cantidad / alfabetico (o click en `[cant]`) |

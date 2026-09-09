@@ -9,16 +9,18 @@ local eq, check, test = h.eq, h.check, h.test
 local IN, OUT = "minecraft:chest_in", "minecraft:chest_out"
 
 --- Mundo + storage + ui limpios, con `stock` ya guardado en la red.
-local function setup(stock, outSize)
+local function setup(stock, outSize, termOpts)
   mock.reset({
     { name = IN, size = 27 },
     { name = OUT, size = outSize or 27 },
     { name = "minecraft:chest_0", size = 27 },
     { name = "minecraft:chest_1", size = 27 },
   })
-  mterm.reset()
+  mterm.reset(termOpts)
 
-  for _, mod in ipairs({ "lib.storage", "lib.items", "lib.ui" }) do package.loaded[mod] = nil end
+  for _, mod in ipairs({ "lib.storage", "lib.items", "lib.ui", "lib.draw", "lib.dialog" }) do
+    package.loaded[mod] = nil
+  end
   local items = require("lib.items")
   items.reset()
   local storage = require("lib.storage")
@@ -291,6 +293,36 @@ test("click en el orden alterna cantidad / alfabetico", function()
   ui.run(storage, cfg)
 
   check(mterm.lastFrame():find("%[A%-Z%]") ~= nil, "quedo en orden alfabetico")
+end)
+
+test("anda en una computadora normal (sin color ni mouse)", function()
+  local storage, ui, cfg = setup({
+    ["minecraft:cobblestone"] = 300,
+    ["minecraft:oak_log"] = 64,
+  }, nil, { colour = false })
+
+  mterm.type("oak")
+  mterm.key(mterm.KEYS.enter)  -- dialogo de cantidad
+  mterm.type("a")              -- "todo" sin mouse
+  mterm.key(mterm.KEYS.enter)
+  mterm.key(mterm.KEYS.f1)     -- overlay de ayuda
+  mterm.key(mterm.KEYS.enter)
+  mterm.key(mterm.KEYS.f10)
+  ui.run(storage, cfg)
+
+  eq(mock.count(OUT, "minecraft:oak_log"), 64, "la tecla a pidio todo el stock")
+  check(mterm.lastFrame():find("Oak Log", 1, true) ~= nil, "la lista se dibujo igual")
+end)
+
+test("la tecla a pide todo el stock disponible", function()
+  local storage, ui, cfg = setup({ ["minecraft:cobblestone"] = 150 })
+  mterm.key(mterm.KEYS.enter)
+  mterm.type("a")
+  mterm.key(mterm.KEYS.enter)
+  mterm.key(mterm.KEYS.f10)
+  ui.run(storage, cfg)
+
+  eq(mock.count(OUT, "minecraft:cobblestone"), 150, "entrego todo")
 end)
 
 test("F3 muestra el diagnostico del armado", function()

@@ -64,15 +64,20 @@ end
 local function warnAboutProblems()
   local report = storage.diagnose()
   if #report.problems == 0 then return end
-  term.setTextColour(colours.yellow)
+  -- Las computadoras normales solo aceptan blanco y negro: pedirles otro color
+  -- tira "Colour not supported".
+  local function tint(c)
+    if term.isColour and term.isColour() then term.setTextColour(c) end
+  end
+  tint(colours.yellow)
   print("")
   print("revisa el armado:")
   for _, problem in ipairs(report.problems) do print("  ! " .. problem) end
-  term.setTextColour(colours.lightGrey)
+  tint(colours.lightGrey)
   print("")
   print("(F3 dentro del programa repite este diagnostico)")
   print("tecla para continuar...")
-  term.setTextColour(colours.white)
+  tint(colours.white)
   os.pullEvent("key")
 end
 

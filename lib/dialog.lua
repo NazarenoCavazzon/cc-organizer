@@ -99,7 +99,7 @@ function dialog.number(opts)
   }
 
   while true do
-    local width = math.max(34, #opts.title + 4)
+    local width = math.max(38, #opts.title + 4)
     for _, l in ipairs(opts.info or {}) do width = math.max(width, #l + 3) end
     local infoCount = #(opts.info or {})
     local x, y, w = frame(opts.title, width, infoCount + 7)
@@ -142,22 +142,26 @@ function dialog.number(opts)
     if error_ then
       line(x, row, w, error_, colours.red)
     else
-      line(x, row, w, "enter confirma   ctrl+d cancela", colours.lightGrey)
+      line(x, row, w, "enter ok   a = todo   ctrl+d cancela", colours.lightGrey)
     end
 
     draw.cursor(1, 1, false)
     draw.present()
 
-    local event, a, clickX, clickY = os.pullEvent()
+    local event, param, clickX, clickY = os.pullEvent()
     error_ = nil
     if event == "key_up" then
-      if a == keys.leftCtrl or a == keys.rightCtrl then ctrl = false end
+      if param == keys.leftCtrl or param == keys.rightCtrl then ctrl = false end
     elseif event == "char" then
-      if CHARS:find(a, 1, true) then
-        text = (fresh and "" or text) .. a
+      if CHARS:find(param, 1, true) then
+        text = (fresh and "" or text) .. param
         fresh = false
+      elseif param == "a" or param == "A" then
+        -- "todo" sin mouse: en una computadora normal no hay clicks.
+        text, fresh = tostring(opts.max or 1), false
       end
     elseif event == "key" then
+      local a = param
       if a == keys.leftCtrl or a == keys.rightCtrl then
         ctrl = true
       elseif isCancel(a, ctrl) then

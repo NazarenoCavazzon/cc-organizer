@@ -36,6 +36,16 @@ function mt.anyFrame(needle)
   return false
 end
 
+--- En una computadora normal la terminal solo acepta blanco, negro y grises.
+function mt.checkColour(c)
+  if mt.colour then return end
+  local COLOURS = mt.COLOURS
+  if c ~= COLOURS.white and c ~= COLOURS.black
+     and c ~= COLOURS.grey and c ~= COLOURS.lightGrey then
+    error("Colour not supported", 0)
+  end
+end
+
 function mt.event(...) queue[#queue + 1] = { ... } end
 function mt.key(k) mt.event("key", k, false) end
 function mt.char(c) mt.event("char", c) end
@@ -57,7 +67,10 @@ mt.KEYS = {
   leftCtrl = 29, rightCtrl = 157, u = 22, d = 32,
 }
 
-function mt.reset()
+--- opts.colour = false emula una computadora normal: sin mouse y solo blanco y
+--- negro (pedirle otro color tira "Colour not supported", como en el juego).
+function mt.reset(opts)
+  mt.colour = not (opts and opts.colour == false)
   screen, cx, cy = blank(), 1, 1
   queue, inputs = {}, {}
   mt.frames = {}
@@ -70,15 +83,15 @@ function mt.reset()
     local t
     t = {
       getSize = function() return W, H end,
-      isColour = function() return true end,
-      isColor = function() return true end,
+      isColour = function() return mt.colour end,
+      isColor = function() return mt.colour end,
       setCursorPos = function(x, y) cx, cy = math.floor(x), math.floor(y) end,
       getCursorPos = function() return cx, cy end,
       setCursorBlink = function() end,
-      setTextColour = function() end,
-      setTextColor = function() end,
-      setBackgroundColour = function() end,
-      setBackgroundColor = function() end,
+      setTextColour = function(c) mt.checkColour(c) end,
+      setTextColor = function(c) mt.checkColour(c) end,
+      setBackgroundColour = function(c) mt.checkColour(c) end,
+      setBackgroundColor = function(c) mt.checkColour(c) end,
       write = function(s)
         s = tostring(s)
         if cy < 1 or cy > H then return end

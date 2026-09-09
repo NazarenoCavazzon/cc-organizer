@@ -165,6 +165,8 @@ local function showHelp()
     "tab             detalle: donde esta guardado",
     "click           elegir; de nuevo, pedir",
     "click derecho   pedir todo el stock",
+    "                (el mouse solo anda en las",
+    "                 Advanced Computer)",
     "ctrl+u          limpiar la busqueda",
     "F2              orden: cantidad / A-Z",
     "F3              diagnostico del armado",
