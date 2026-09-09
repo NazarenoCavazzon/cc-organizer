@@ -24,12 +24,26 @@ local FILES = {
 -- config.lua no se pisa: ahi estan los nombres de tus cofres.
 local ONCE = { "config.lua" }
 
+--- Baja una URL cerrando siempre la conexion. Reintenta porque CC limita las
+--- requests simultaneas por computadora (http.max_requests, 16 por defecto) y
+--- un install cortado a la mitad deja slots ocupados un rato: eso es el
+--- "Backend.max_conn reached".
 local function get(url)
-  local res, err = http.get(url)
-  if not res then return nil, err end
-  local body = res.readAll()
-  res.close()
-  return body
+  local err
+  for attempt = 1, 3 do
+    local res
+    res, err = http.get(url)
+    if res then
+      local body = res.readAll()
+      res.close()
+      return body
+    end
+    if attempt < 3 then
+      print("  reintentando (" .. tostring(err) .. ")")
+      os.sleep(attempt * 2)
+    end
+  end
+  return nil, err
 end
 
 --- SHA del ultimo commit de la rama, para bajar todo de la misma version.
@@ -81,5 +95,6 @@ for _, path in ipairs(ONCE) do ok = download(base, path, true) and ok end
 if ok then
   print("listo. reinicia la computadora con: reboot")
 else
-  printError("hubo errores; revisa la conexion y volve a correr install")
+  printError("hubo errores.")
+  printError("si dice max_conn: reinicia con `reboot` y volve a correr install")
 end
