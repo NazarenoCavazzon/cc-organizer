@@ -145,7 +145,7 @@ function dialog.number(opts)
     local width = math.max(38, #opts.title + 4)
     for _, l in ipairs(opts.info or {}) do width = math.max(width, #l + 3) end
     local infoCount = #(opts.info or {})
-    local x, y, w = frame(opts.title, width, infoCount + 7)
+    local x, y, w = frame(opts.title, width, infoCount + 8)
 
     local row = y + 1
     for _, l in ipairs(opts.info or {}) do
@@ -160,7 +160,7 @@ function dialog.number(opts)
     draw.at(x + 11, row, draw.fit(text .. "_", w - 12))
     row = row + 1
 
-    -- Botones de cantidad rapida y cancelar.
+    -- Los presets solo llenan el campo: mandar los items necesita confirmar.
     local buttons, bx = {}, x + 1
     draw.paint(colours.white, colours.grey)
     draw.at(x + 1, row, string.rep(" ", w - 2))
@@ -169,23 +169,30 @@ function dialog.number(opts)
       if bx + #label <= x + w - 1 then
         draw.paint(colours.black, colours.lightGrey)
         draw.at(bx, row, label)
-        buttons[#buttons + 1] = { x1 = bx, x2 = bx + #label - 1, y = row, value = preset.value }
+        buttons[#buttons + 1] = { x1 = bx, x2 = bx + #label - 1, y = row, fill = preset.value }
         bx = bx + #label + 1
       end
     end
-    local cancel = " cancelar "
-    local cx = x + w - 1 - #cancel
-    if cx > bx then
-      draw.paint(colours.white, colours.red)
-      draw.at(cx, row, cancel)
-      buttons[#buttons + 1] = { x1 = cx, x2 = cx + #cancel - 1, y = row, cancel = true }
-    end
+    row = row + 1
+
+    -- Fila de confirmar / cancelar, alineada a la derecha.
+    local confirm, cancel = " pedir ", " cancelar "
+    local cancelX = x + w - 1 - #cancel
+    local confirmX = cancelX - 1 - #confirm
+    draw.paint(colours.white, colours.grey)
+    draw.at(x + 1, row, string.rep(" ", w - 2))
+    draw.paint(colours.black, colours.lime)
+    draw.at(confirmX, row, confirm)
+    buttons[#buttons + 1] = { x1 = confirmX, x2 = confirmX + #confirm - 1, y = row, confirm = true }
+    draw.paint(colours.white, colours.red)
+    draw.at(cancelX, row, cancel)
+    buttons[#buttons + 1] = { x1 = cancelX, x2 = cancelX + #cancel - 1, y = row, cancel = true }
     row = row + 1
 
     if error_ then
       line(x, row, w, error_, colours.red)
     else
-      line(x, row, w, "enter ok   a = todo   ctrl+d cancela", colours.lightGrey)
+      line(x, row, w, "enter pedir  a = todo  ctrl+d cancela", colours.lightGrey)
     end
 
     draw.cursor(1, 1, false)
@@ -228,7 +235,17 @@ function dialog.number(opts)
       for _, b in ipairs(buttons) do
         if clickY == b.y and clickX >= b.x1 and clickX <= b.x2 then
           if b.cancel then return nil end
-          return math.min(b.value, opts.max or b.value)
+          if b.fill then
+            -- Llena el campo y espera: el click no manda nada por si solo.
+            text, fresh = tostring(math.min(b.fill, opts.max or b.fill)), false
+          else
+            local value = evaluate(text)
+            if not value or value <= 0 then
+              error_ = "cantidad invalida"
+            else
+              return math.min(value, opts.max or value)
+            end
+          end
         end
       end
     end

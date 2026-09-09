@@ -66,8 +66,10 @@ El **escape no se usa**: en CC cierra la GUI de la computadora y el programa
 nunca lo recibe. Para cancelar un dialogo es `ctrl+d` o el boton `cancelar`.
 
 En el dialogo de cantidad viene sugerido un stack, el primer numero que escribis
-lo reemplaza, y podes escribir cuentas (`64*3+16`). Tambien hay botones
-`1 / 16 / 64 / todo` y `cancelar` clickeables, y las flechas suben y bajan de a uno.
+lo reemplaza, y podes escribir cuentas (`64*3+16`). Los botones `1 / 16 / 64 /
+todo` **solo llenan el campo**: para que salgan los items hay que confirmar con
+`enter` o con el boton `pedir`, asi un click de mas no te vacia el cofre. Las
+flechas suben y bajan de a uno.
 
 El cofre de entrada se vacia solo cada 3 segundos (`autoStoreInterval` en `config.lua`)
 y la pantalla avisa cuanto guardo. Si rompes o agregas un cofre, el indice se actualiza

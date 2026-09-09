@@ -223,16 +223,58 @@ test("ctrl+d cancela el pedido sin mover nada", function()
   eq(storage.count("minecraft:cobblestone"), 300, "el stock quedo igual")
 end)
 
+-- Coordenadas del dialogo con dos lineas de info: caja de 38 de ancho centrada
+-- en x=7, con los presets en la fila 9 y pedir/cancelar en la 10. Si un click
+-- no cae en su boton el dialogo queda abierto, se come el F10 y el test explota
+-- al vaciarse la cola de eventos, asi que son coordenadas verificadas.
+local PRESET_16 = { x = 13, y = 9 }
+local BOTON_PEDIR = { x = 29, y = 10 }
+local BOTON_CANCELAR = { x = 38, y = 10 }
+
 test("el boton cancelar del dialogo tambien cierra", function()
   local storage, ui, cfg = setup({ ["minecraft:cobblestone"] = 300 })
   mterm.key(mterm.KEYS.enter)
-  -- Si el click no cae en el boton, el dialogo queda abierto, se come el F10 y
-  -- el test explota al vaciarse la cola: la coordenada esta verificada.
-  mterm.click(1, 36, 10)
+  mterm.click(1, BOTON_CANCELAR.x, BOTON_CANCELAR.y)
   mterm.key(mterm.KEYS.f10)
   ui.run(storage, cfg)
 
   eq(mock.count(OUT, "minecraft:cobblestone"), 0, "no entrego nada")
+end)
+
+test("clickear una cantidad la escribe pero no manda nada", function()
+  local storage, ui, cfg = setup({ ["minecraft:cobblestone"] = 300 })
+  mterm.key(mterm.KEYS.enter)
+  mterm.click(1, PRESET_16.x, PRESET_16.y)  -- boton "16"
+  mterm.key(mterm.KEYS.f10)                 -- el dialogo sigue abierto: lo ignora
+  mterm.key(mterm.KEYS.leftCtrl)
+  mterm.key(mterm.KEYS.d)                   -- cancela
+  mterm.key(mterm.KEYS.f10)
+  ui.run(storage, cfg)
+
+  check(mterm.anyFrame("cantidad: 16_"), "el click lleno el campo")
+  eq(mock.count(OUT, "minecraft:cobblestone"), 0, "pero no entrego nada sin confirmar")
+end)
+
+test("el boton pedir confirma la cantidad clickeada", function()
+  local storage, ui, cfg = setup({ ["minecraft:cobblestone"] = 300 })
+  mterm.key(mterm.KEYS.enter)
+  mterm.click(1, PRESET_16.x, PRESET_16.y)
+  mterm.click(1, BOTON_PEDIR.x, BOTON_PEDIR.y)
+  mterm.key(mterm.KEYS.f10)
+  ui.run(storage, cfg)
+
+  eq(mock.count(OUT, "minecraft:cobblestone"), 16, "recien ahi mando los items")
+end)
+
+test("enter tambien confirma lo que clickeaste", function()
+  local storage, ui, cfg = setup({ ["minecraft:cobblestone"] = 300 })
+  mterm.key(mterm.KEYS.enter)
+  mterm.click(1, PRESET_16.x, PRESET_16.y)
+  mterm.key(mterm.KEYS.enter)
+  mterm.key(mterm.KEYS.f10)
+  ui.run(storage, cfg)
+
+  eq(mock.count(OUT, "minecraft:cobblestone"), 16, "mismo resultado por teclado")
 end)
 
 test("ctrl+d cancela el dialogo sin cerrar el programa", function()
