@@ -82,6 +82,49 @@ function dialog.message(title, lines)
   end
 end
 
+--- Detalle de un item: el sprite a la izquierda y los datos al costado.
+--- `icon` son filas de celdas { char, fg, bg }, como las devuelve lib/icons.
+function dialog.detail(title, icon, lines)
+  local W, H = draw.size()
+  local iconW = icon[1] and #icon[1] or 0
+  local iconH = #icon
+  local gutter = iconW > 0 and iconW + 2 or 0
+
+  local width = math.max(#title + 4, 24)
+  for i, l in ipairs(lines) do
+    -- Las primeras lineas van al lado del icono; el resto ocupa todo el ancho.
+    width = math.max(width, (i <= iconH and gutter or 0) + #l + 3)
+  end
+  local height = math.max(iconH, #lines) + 3
+  if height > H - 2 then
+    local keep = H - 5 - math.max(0, iconH - #lines)
+    while #lines > keep do table.remove(lines) end
+    height = math.max(iconH, #lines) + 3
+  end
+
+  local x, y, w = frame(title, width, height)
+  for r, cells in ipairs(icon) do
+    for c, cell in ipairs(cells) do
+      draw.paint(cell[2], cell[3])
+      draw.at(x + c, y + 1 + r, cell[1])
+    end
+  end
+  for i, text in ipairs(lines) do
+    local left = i <= iconH and gutter or 0
+    draw.paint(colours.white, colours.grey)
+    draw.at(x + 1 + left, y + 1 + i, draw.fit(text, w - 2 - left))
+  end
+  draw.paint(colours.lightGrey, colours.grey)
+  draw.at(x + 1, y + height - 1, draw.fit("tecla para cerrar", w - 2))
+  draw.cursor(1, 1, false)
+  draw.present()
+
+  while true do
+    local event = os.pullEvent()
+    if event == "key" or event == "mouse_click" then return end
+  end
+end
+
 --- Pide una cantidad. Devuelve el numero o nil si cancelan.
 --- opts: { title, info = {lineas}, default, max }
 function dialog.number(opts)

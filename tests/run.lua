@@ -288,6 +288,7 @@ test("el diagnostico distingue lleno de verdad", function()
   check(problems:find("llenos de verdad", 1, true) ~= nil, "avisa que si esta lleno: " .. problems)
 end)
 
+require("tests.icons")
 require("tests.tui")
 
 os.exit(h.summary() and 0 or 1)  -- 5.1 acepta el booleano como codigo 0/1

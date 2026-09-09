@@ -49,7 +49,7 @@ por vos. Se puede volver a abrir con **F9**.
 | escribir | filtra la lista en vivo (por nombre o id) |
 | flechas / RePag / AvPag | mover la seleccion |
 | enter | pedir: abre el dialogo de cantidad |
-| tab | detalle del item: en que cofres esta y cuantos slots ocupa |
+| tab | detalle del item: sprite, en que cofres esta y cuantos slots ocupa |
 | click | seleccionar; click de nuevo pide (solo Advanced Computer) |
 | click derecho | pedir todo el stock de ese item (idem) |
 | a (en el dialogo) | poner todo el stock como cantidad |
@@ -73,6 +73,19 @@ El cofre de entrada se vacia solo cada 3 segundos (`autoStoreInterval` en `confi
 y la pantalla avisa cuanto guardo. Si rompes o agregas un cofre, el indice se actualiza
 solo.
 
+## Los sprites
+
+La terminal de CC no puede mostrar la textura real de un item, pero cada
+caracter puede pintar 2x3 subpixeles con los caracteres 128..159. El detalle
+(tab) usa 8 celdas por 4 filas, o sea **16x12 pixeles**, casi la resolucion de
+una textura de Minecraft.
+
+Los dibujos son procedurales: la **forma** sale del tipo de item (lingote, gema,
+herramienta, polvo, comida, planta, liquido, palo, bloque) y el **color** del
+material (hierro gris claro, diamante celeste, madera marron...). Asi cualquier
+item del juego o de un mod tiene icono sin mantener una tabla item por item; lo
+desconocido cae en un color estable sacado del nombre. Esta en `lib/icons.lua`.
+
 ## Como reparte los items
 
 Al guardar, cada stack va primero al cofre que **ya tiene ese item** con espacio (compacta
@@ -89,6 +102,7 @@ lib/items.lua      claves de item, cache de nombres, busqueda
 lib/ui.lua         TUI: lista, busqueda y eventos
 lib/dialog.lua     ventanas modales (cantidad, detalle, ayuda)
 lib/draw.lua       helpers de dibujo sobre el buffer
+lib/icons.lua      sprites procedurales de 16x12
 lib/setup.lua      asistente de configuracion
 install.lua        instalador via wget
 ```

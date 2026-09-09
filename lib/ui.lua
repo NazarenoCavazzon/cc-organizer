@@ -14,6 +14,7 @@
 local items = require("lib.items")
 local draw = require("lib.draw")
 local dialog = require("lib.dialog")
+local icons = require("lib.icons")
 
 local ui = {}
 
@@ -204,18 +205,18 @@ end
 local function showDetail()
   local entry = rows[sel]
   if not entry then return end
+  local locations = storage.locations(entry.key)
   local lines = {
     entry.key,
-    ("%d unidades, apila de a %d"):format(entry.total, items.maxCount(entry.key)),
-    "",
+    ("%d unidades"):format(entry.total),
+    ("apila de a %d"):format(items.maxCount(entry.key)),
+    ("en %d %s"):format(#locations, #locations == 1 and "cofre" or "cofres"),
   }
-  local locations = storage.locations(entry.key)
-  lines[#lines + 1] = ("guardado en %d %s:"):format(#locations, #locations == 1 and "cofre" or "cofres")
   for _, loc in ipairs(locations) do
-    lines[#lines + 1] = ("  %-24s %5d en %d %s")
+    lines[#lines + 1] = ("  %-22s %5d en %d %s")
       :format(loc.chest, loc.count, loc.slots, loc.slots == 1 and "slot" or "slots")
   end
-  dialog.message(entry.display, lines)
+  dialog.detail(entry.display, icons.render(entry.key, colours.black), lines)
   dirty = true
 end
 

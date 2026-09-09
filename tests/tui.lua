@@ -248,15 +248,28 @@ test("ctrl+d cancela el dialogo sin cerrar el programa", function()
   check(mterm.lastFrame():find("buscar: cob", 1, true) ~= nil, "seguia en la lista")
 end)
 
-test("tab muestra donde esta guardado el item", function()
+test("tab muestra el sprite y donde esta guardado el item", function()
   local storage, ui, cfg = setup({ ["minecraft:cobblestone"] = 300 })
   mterm.key(mterm.KEYS.tab)
   mterm.key(mterm.KEYS.enter)
   mterm.key(mterm.KEYS.f10)
   ui.run(storage, cfg)
 
-  check(mterm.anyFrame("guardado en"), "dice en cuantos cofres esta")
+  check(mterm.anyFrame("300 unidades"), "dice cuanto hay")
+  check(mterm.anyFrame("apila de a 64"), "dice cuanto apila")
   check(mterm.anyFrame("minecraft:chest_0"), "y en cuales")
+
+  -- El sprite se dibuja con los caracteres de bloque 128..159.
+  local drew = false
+  for _, frame in ipairs(mterm.frames) do
+    if frame:find("300 unidades", 1, true) then
+      for i = 1, #frame do
+        local byte = frame:byte(i)
+        if byte >= 128 and byte <= 159 then drew = true break end
+      end
+    end
+  end
+  check(drew, "hay pixeles de sprite en la pantalla del detalle")
 end)
 
 test("ctrl+u limpia la busqueda", function()
