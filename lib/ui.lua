@@ -144,7 +144,7 @@ end
 local function drawHelp()
   paint(colours.black, colour and colours.grey or colours.white)
   term.setCursorPos(1, H)
-  term.write(fit(" enter pedir   F1 ayuda   F5 scan   F10 salir", W))
+  term.write(fit(" enter pedir  F1 ayuda  F3 diag  F5 scan  F10 salir", W))
 end
 
 local function draw()
@@ -162,6 +162,13 @@ end
 
 --- Ventana modal simple; devuelve cuando el usuario aprieta una tecla.
 local function overlay(title, lines)
+  local maxLines = math.max(1, H - 5)
+  if #lines > maxLines then
+    local cut = {}
+    for i = 1, maxLines - 1 do cut[i] = lines[i] end
+    cut[maxLines] = ("... y %d lineas mas"):format(#lines - maxLines + 1)
+    lines = cut
+  end
   local w = #title + 4
   for _, l in ipairs(lines) do w = math.max(w, #l + 4) end
   w = math.min(w, W)
@@ -187,6 +194,25 @@ local function overlay(title, lines)
   dirty = true
 end
 
+--- Por que no entra nada / que ve el programa de la red.
+local function showDiagnostics()
+  local report = storage.diagnose()
+  local lines = {}
+  if #report.problems == 0 then
+    lines[#lines + 1] = "no veo problemas en el armado"
+  else
+    for _, p in ipairs(report.problems) do lines[#lines + 1] = "! " .. p end
+  end
+  lines[#lines + 1] = ""
+  lines[#lines + 1] = ("entrada: %s"):format(cfg.input)
+  lines[#lines + 1] = ("salida:  %s"):format(cfg.output)
+  lines[#lines + 1] = ("cofres de almacenamiento: %d"):format(#report.chests)
+  for _, c in ipairs(report.chests) do
+    lines[#lines + 1] = ("  %-28s %2d/%2d slots"):format(c.name, c.used, c.size)
+  end
+  overlay("diagnostico", lines)
+end
+
 local function showHelp()
   overlay("atajos", {
     "escribir       filtra la lista",
@@ -196,6 +222,7 @@ local function showHelp()
     "click derecho  pedir todo el stock",
     "esc            limpiar la busqueda",
     "F2             ordenar por cantidad / nombre",
+    "F3             diagnostico del armado",
     "F5             re-escanear la red",
     "F9             reconfigurar entrada/salida",
     "F10            salir",
@@ -294,6 +321,7 @@ local function onKey(key)
     if #query > 0 then query = ""; recompute() end
   elseif key == keys.f1 then showHelp()
   elseif key == keys.f2 then sortByName = not sortByName; recompute(true)
+  elseif key == keys.f3 then showDiagnostics()
   elseif key == keys.f5 then doRefresh()
   elseif key == keys.f9 then ui.reconfigure = true; running = false
   elseif key == keys.f10 then running = false

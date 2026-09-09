@@ -60,10 +60,27 @@ if not configured() then
   end
 end
 
+--- Si el armado tiene problemas conviene decirlo antes de abrir la TUI.
+local function warnAboutProblems()
+  local report = storage.diagnose()
+  if #report.problems == 0 then return end
+  term.setTextColour(colours.yellow)
+  print("")
+  print("revisa el armado:")
+  for _, problem in ipairs(report.problems) do print("  ! " .. problem) end
+  term.setTextColour(colours.lightGrey)
+  print("")
+  print("(F3 dentro del programa repite este diagnostico)")
+  print("tecla para continuar...")
+  term.setTextColour(colours.white)
+  os.pullEvent("key")
+end
+
 repeat
   print("escaneando la red...")
   storage.init(config)
   storage.refresh()
+  warnAboutProblems()
 
   parallel.waitForAny(
     function() ui.run(storage, config) end,

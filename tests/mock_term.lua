@@ -51,7 +51,7 @@ mt.COLOURS = {
 mt.KEYS = {
   up = 200, down = 208, pageUp = 201, pageDown = 209, home = 199, ["end"] = 207,
   enter = 28, numPadEnter = 156, backspace = 14, escape = 1, tab = 15,
-  f1 = 59, f2 = 60, f5 = 63, f9 = 67, f10 = 68, q = 16,
+  f1 = 59, f2 = 60, f3 = 61, f5 = 63, f9 = 67, f10 = 68, q = 16,
 }
 
 function mt.reset()

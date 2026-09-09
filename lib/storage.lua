@@ -16,6 +16,12 @@ storage.busy = false
 
 local BATCH = 40
 
+-- Los peripherals pegados directo a la computadora se llaman por su lado. Esos
+-- NO estan en la red de cables, asi que ningun otro cofre puede moverles items.
+local SIDES = {
+  top = true, bottom = true, left = true, right = true, front = true, back = true,
+}
+
 --- Corre fn sobre cada elemento en paralelo, en tandas para no abusar de corrutinas.
 local function eachParallel(list, fn)
   if not parallel or #list <= 1 then
@@ -165,7 +171,18 @@ local function targetsFor(key)
   local out = {}
   for _, t in ipairs(withItem) do out[#out + 1] = t.c end
   for _, t in ipairs(withSpace) do out[#out + 1] = t.c end
+  if #out == 0 then
+    -- El indice dice que no entra en ningun lado. Puede ser cierto o puede ser
+    -- que este desactualizado: probamos igual para que el error sea el real.
+    for _, c in ipairs(chests) do out[#out + 1] = c end
+  end
   return out
+end
+
+--- Mensajes de error de CC vienen como "startup.lua:12: texto"; solo queremos el texto.
+local function cleanError(err)
+  err = tostring(err)
+  return (err:gsub("^.-:%d+: ", ""))
 end
 
 --- Vacia el cofre de entrada repartiendo todo en la red.
@@ -176,7 +193,7 @@ function storage.store()
   local ok, list = pcall(inv.list)
   if not ok or not list then return 0, 0, "no puedo leer el cofre de entrada" end
 
-  local moved, left, touched = 0, 0, {}
+  local moved, left, touched, moveError = 0, 0, {}, nil
   for slot, item in pairs(list) do
     local key = items.key(item)
     if not items.hasMeta(key) then
@@ -187,7 +204,9 @@ function storage.store()
     for _, c in ipairs(targetsFor(key)) do
       if remaining <= 0 then break end
       local okm, n = pcall(c.wrap.pullItems, cfg.input, slot, remaining)
-      if okm and n and n > 0 then
+      if not okm then
+        moveError = cleanError(n)
+      elseif n and n > 0 then
         remaining = remaining - n
         moved = moved + n
         touched[c.name] = true
@@ -199,8 +218,59 @@ function storage.store()
   end
 
   if next(touched) then rebuildIndex() end
-  if left > 0 then return moved, left, "almacenamiento lleno" end
+  if left > 0 then
+    if #chests == 0 then
+      return moved, left, "no hay cofres de almacenamiento en la red"
+    elseif SIDES[cfg.input] then
+      return moved, left, "el cofre de entrada no esta en la red de cables (F3)"
+    elseif moveError then
+      return moved, left, moveError
+    end
+    return moved, left, "almacenamiento lleno"
+  end
   return moved, left
+end
+
+--- Revision del armado: devuelve los problemas encontrados y el estado por cofre.
+function storage.diagnose()
+  local report = { problems = {}, chests = {} }
+  local function problem(fmt, ...)
+    report.problems[#report.problems + 1] = fmt:format(...)
+  end
+
+  for _, io in ipairs({ { cfg.input, "entrada" }, { cfg.output, "salida" } }) do
+    local name, label = io[1], io[2]
+    if not peripheral.isPresent(name) then
+      problem("el cofre de %s (%s) no esta en la red", label, name)
+    elseif SIDES[name] then
+      problem("el cofre de %s esta pegado a la computadora (lado '%s'):", label, name)
+      problem("  ponele un modem cableado y reconfiguralo con F9")
+    elseif not peripheral.hasType(name, "inventory") then
+      problem("el cofre de %s (%s) no es un inventario", label, name)
+    end
+  end
+
+  if #chests == 0 then
+    problem("no hay cofres de almacenamiento: conecta mas cofres con modem")
+  end
+
+  local sideChests = 0
+  for _, c in ipairs(chests) do
+    local used = 0
+    for _ in pairs(contents[c.name] or {}) do used = used + 1 end
+    report.chests[#report.chests + 1] = { name = c.name, size = c.size or 0, used = used }
+    if SIDES[c.name] then sideChests = sideChests + 1 end
+    if (c.size or 0) == 0 then problem("no puedo leer el tamano de %s", c.name) end
+  end
+  if sideChests > 0 then
+    problem("%d cofre(s) estan pegados a la computadora en vez de la red", sideChests)
+  end
+
+  local s = storage.space()
+  if #chests > 0 and s.free == 0 then
+    problem("todos los cofres estan llenos de verdad (%d/%d slots)", s.used, s.slots)
+  end
+  return report
 end
 
 --- Espacio del cofre de salida para una clave (para explicar por que no se entrego todo).

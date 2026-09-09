@@ -11,6 +11,12 @@ local MAXCOUNT = {
 local registry = {}
 local order = {}
 
+-- Un peripheral pegado a la computadora se llama por su lado y no existe para
+-- el resto de la red: pullItems contra el falla, igual que en el juego.
+local SIDES = {
+  top = true, bottom = true, left = true, right = true, front = true, back = true,
+}
+
 local function maxCount(name) return MAXCOUNT[name] or 64 end
 
 local function displayName(name)
@@ -68,6 +74,7 @@ local function newChest(name, size)
   end
 
   function c.pullItems(fromName, fromSlot, limit)
+    if SIDES[fromName] then error("Target '" .. fromName .. "' does not exist", 0) end
     local from = registry[fromName]
     if not from then error("no such peripheral: " .. tostring(fromName)) end
     local it = from.__slots[fromSlot]

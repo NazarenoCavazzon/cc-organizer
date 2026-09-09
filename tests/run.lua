@@ -8,7 +8,7 @@ local h = require("tests.harness")
 
 local IN, OUT = "minecraft:chest_in", "minecraft:chest_out"
 
-local eq, test = h.eq, h.test
+local eq, check, test = h.eq, h.check, h.test
 
 --- Arma un mundo nuevo y devuelve un storage limpio.
 local function setup(chestSpec, config)
@@ -201,6 +201,61 @@ test("el indice sobrevive a un cofre que desaparece", function()
   storage.refresh()
   eq(storage.space().chests, 1, "queda un solo cofre")
   eq(storage.count("minecraft:cobblestone"), 36, "el stock refleja solo lo que sigue en la red")
+end)
+
+test("avisa que no hay cofres de almacenamiento", function()
+  local storage = setup({})
+  mock.give(IN, "minecraft:cobblestone", 64)
+  local moved, left, err = storage.store()
+  eq(moved, 0, "no movio nada")
+  eq(left, 64, "quedo todo en la entrada")
+  eq(err, "no hay cofres de almacenamiento en la red", "el motivo es claro")
+  eq(#storage.diagnose().problems, 1, "el diagnostico lo reporta")
+end)
+
+test("detecta el cofre de entrada pegado a la computadora", function()
+  -- "top" = pegado a la computadora, no en la red de cables: ningun cofre
+  -- puede sacarle items.
+  mock.reset({
+    { name = "top", size = 27 },
+    { name = OUT, size = 27 },
+    { name = "minecraft:chest_0", size = 27 },
+  })
+  package.loaded["lib.storage"] = nil
+  package.loaded["lib.items"] = nil
+  require("lib.items").reset()
+  local storage = require("lib.storage")
+  storage.init({ input = "top", output = OUT, ignore = {} })
+  storage.refresh()
+
+  mock.give("top", "minecraft:cobblestone", 64)
+  local moved, left, err = storage.store()
+  eq(moved, 0, "no pudo mover nada")
+  eq(left, 64, "quedo todo en la entrada")
+  eq(err, "el cofre de entrada no esta en la red de cables (F3)", "el motivo es el real")
+
+  local problems = table.concat(storage.diagnose().problems, " | ")
+  check(problems:find("pegado a la computadora", 1, true) ~= nil,
+    "el diagnostico explica el problema: " .. problems)
+end)
+
+test("reporta el error real de un cofre que rechaza el movimiento", function()
+  local storage = setup({ { name = "minecraft:chest_0", size = 27 } })
+  mock.chest("minecraft:chest_0").pullItems = function() error("Inventory is locked", 0) end
+  mock.give(IN, "minecraft:cobblestone", 64)
+
+  local moved, left, err = storage.store()
+  eq(moved, 0, "no movio nada")
+  eq(err, "Inventory is locked", "propaga el error del cofre en vez de inventar")
+end)
+
+test("el diagnostico distingue lleno de verdad", function()
+  local storage = setup({ { name = "minecraft:chest_0", size = 1 } })
+  mock.give(IN, "minecraft:cobblestone", 200)
+  storage.store()
+
+  local problems = table.concat(storage.diagnose().problems, " | ")
+  check(problems:find("llenos de verdad", 1, true) ~= nil, "avisa que si esta lleno: " .. problems)
 end)
 
 require("tests.tui")

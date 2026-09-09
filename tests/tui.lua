@@ -166,6 +166,17 @@ test("F1 abre la ayuda y vuelve", function()
   check(mterm.lastFrame():find("Cobblestone", 1, true) ~= nil, "volvio a la lista")
 end)
 
+test("F3 muestra el diagnostico del armado", function()
+  local storage, ui, cfg = setup({ ["minecraft:cobblestone"] = 64 })
+  mterm.key(mterm.KEYS.f3)
+  mterm.key(mterm.KEYS.enter)
+  mterm.key(mterm.KEYS.f10)
+  ui.run(storage, cfg)
+
+  check(mterm.anyFrame("diagnostico"), "se dibujo el diagnostico")
+  check(mterm.anyFrame("minecraft:chest_0"), "lista los cofres con su ocupacion")
+end)
+
 test("F9 sale pidiendo reconfigurar", function()
   local storage, ui, cfg = setup({ ["minecraft:cobblestone"] = 64 })
   mterm.key(mterm.KEYS.f9)

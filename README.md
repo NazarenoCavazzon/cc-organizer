@@ -87,3 +87,15 @@ lua tests/run.lua
 de 51x19 con cola de eventos, asi que se testean tanto el reparto (stacks parciales,
 limites de stack, almacenamiento lleno, entrega parcial, cofre roto) como la TUI
 (busqueda, seleccion, pedidos, overlays, scroll).
+
+## Si algo no anda
+
+**F3** abre el diagnostico: muestra los problemas detectados (cofres pegados a la
+computadora en vez de conectados por cable, entrada/salida que no existen, sin cofres
+de almacenamiento, o el almacenamiento realmente lleno) y la ocupacion de cada cofre.
+El mismo chequeo corre al arrancar y avisa antes de abrir la interfaz.
+
+El error mas comun es tener el cofre de entrada **pegado** a la computadora: en ese caso
+su nombre es un lado (`top`, `left`, `back`...) en vez de `minecraft:chest_N`, y ningun
+otro cofre de la red puede sacarle items. Se arregla poniendole un modem cableado al
+cofre, activandolo con click derecho, y eligiendolo de nuevo con **F9**.
