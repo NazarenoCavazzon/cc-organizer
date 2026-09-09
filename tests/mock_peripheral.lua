@@ -1,0 +1,144 @@
+-- Mundo falso de cofres para probar lib/storage.lua fuera de Minecraft.
+-- Define los globales `peripheral` y `parallel` que espera CC:Tweaked.
+
+local mock = {}
+
+local MAXCOUNT = {
+  ["minecraft:ender_pearl"] = 16,
+  ["minecraft:diamond_sword"] = 1,
+}
+
+local registry = {}
+local order = {}
+
+local function maxCount(name) return MAXCOUNT[name] or 64 end
+
+local function displayName(name)
+  local short = name:match("[^:]+$")
+  return (short:gsub("_", " "):gsub("^%l", string.upper))
+end
+
+local function sameStack(a, b)
+  return a.name == b.name and a.nbt == b.nbt
+end
+
+--- Mete hasta `count` unidades en el cofre. Devuelve cuantas entraron.
+local function insert(chest, item, count)
+  local max, placed = maxCount(item.name), 0
+  for slot = 1, chest.__size do
+    local cur = chest.__slots[slot]
+    if placed >= count then break end
+    if cur and sameStack(cur, item) and cur.count < max then
+      local n = math.min(max - cur.count, count - placed)
+      cur.count = cur.count + n
+      placed = placed + n
+    end
+  end
+  for slot = 1, chest.__size do
+    if placed >= count then break end
+    if chest.__slots[slot] == nil then
+      local n = math.min(max, count - placed)
+      chest.__slots[slot] = { name = item.name, nbt = item.nbt, count = n }
+      placed = placed + n
+    end
+  end
+  return placed
+end
+
+local function newChest(name, size)
+  local c = { __name = name, __size = size, __slots = {} }
+
+  function c.size() return c.__size end
+
+  function c.list()
+    local out = {}
+    for slot, it in pairs(c.__slots) do
+      out[slot] = { name = it.name, nbt = it.nbt, count = it.count }
+    end
+    return out
+  end
+
+  function c.getItemDetail(slot)
+    local it = c.__slots[slot]
+    if not it then return nil end
+    return {
+      name = it.name, nbt = it.nbt, count = it.count,
+      displayName = displayName(it.name), maxCount = maxCount(it.name),
+    }
+  end
+
+  function c.pullItems(fromName, fromSlot, limit)
+    local from = registry[fromName]
+    if not from then error("no such peripheral: " .. tostring(fromName)) end
+    local it = from.__slots[fromSlot]
+    if not it then return 0 end
+    local want = math.min(limit or it.count, it.count)
+    local moved = insert(c, it, want)
+    it.count = it.count - moved
+    if it.count <= 0 then from.__slots[fromSlot] = nil end
+    return moved
+  end
+
+  function c.pushItems(toName, fromSlot, limit)
+    local to = registry[toName]
+    if not to then error("no such peripheral: " .. tostring(toName)) end
+    return to.pullItems(c.__name, fromSlot, limit)
+  end
+
+  return c
+end
+
+--- Arranca un mundo nuevo. `spec` es una lista de {name=, size=}.
+function mock.reset(spec)
+  registry, order = {}, {}
+  for _, s in ipairs(spec) do
+    registry[s.name] = newChest(s.name, s.size)
+    order[#order + 1] = s.name
+  end
+
+  _G.peripheral = {
+    getNames = function()
+      local out = {}
+      for _, n in ipairs(order) do out[#out + 1] = n end
+      return out
+    end,
+    wrap = function(name) return registry[name] end,
+    isPresent = function(name) return registry[name] ~= nil end,
+    getType = function(name) return registry[name] and "minecraft:chest" or nil end,
+    hasType = function(name, t) return registry[name] ~= nil and t == "inventory" end,
+  }
+
+  -- En el mock nada cede el control, asi que correr en serie equivale a paralelo.
+  _G.parallel = {
+    waitForAll = function(...)
+      for _, fn in ipairs({ ... }) do fn() end
+    end,
+  }
+end
+
+--- Pone items en un cofre directamente (sin pasar por el sistema).
+function mock.give(name, itemName, count, nbt)
+  local c = assert(registry[name], "cofre inexistente: " .. tostring(name))
+  return insert(c, { name = itemName, nbt = nbt }, count)
+end
+
+--- Total de un item en un cofre.
+function mock.count(name, itemName, nbt)
+  local c = assert(registry[name])
+  local total = 0
+  for _, it in pairs(c.__slots) do
+    if it.name == itemName and it.nbt == nbt then total = total + it.count end
+  end
+  return total
+end
+
+function mock.usedSlots(name)
+  local c = assert(registry[name])
+  local n = 0
+  for _ in pairs(c.__slots) do n = n + 1 end
+  return n
+end
+
+function mock.chest(name) return registry[name] end
+
+return mock
