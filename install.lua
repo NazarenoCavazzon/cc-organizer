@@ -1,40 +1,57 @@
--- Instalador para bajar cc-organizer desde GitHub dentro del juego.
---   wget <raw del repo>/install.lua install.lua
+-- Instalador de cc-organizer.
+--   wget https://raw.githubusercontent.com/NazarenoCavazzon/cc-organizer/main/install.lua install.lua
 --   install
--- Cambia REPO por tu usuario/rama si hiciste fork.
+--
+-- Baja los archivos pineados al ultimo commit: las URLs con SHA son inmutables,
+-- asi que nunca te sirve una version vieja del CDN de GitHub (que cachea la rama
+-- unos minutos y es la causa clasica de "lo actualice y sigue igual").
 
-local REPO = "https://raw.githubusercontent.com/NazarenoCavazzon/cc-organizer/main/"
+local OWNER, REPO, BRANCH = "NazarenoCavazzon", "cc-organizer", "main"
 
 local FILES = {
   "install.lua",  -- se actualiza a si mismo para que la lista no quede vieja
   "startup.lua",
-  "lib/items.lua",
   "lib/draw.lua",
   "lib/dialog.lua",
+  "lib/items.lua",
+  "lib/setup.lua",
   "lib/storage.lua",
   "lib/ui.lua",
-  "lib/setup.lua",
 }
 
 -- config.lua no se pisa: ahi estan los nombres de tus cofres.
 local ONCE = { "config.lua" }
 
-local function download(path, skipIfExists)
+local function get(url)
+  local res, err = http.get(url)
+  if not res then return nil, err end
+  local body = res.readAll()
+  res.close()
+  return body
+end
+
+--- SHA del ultimo commit de la rama, para bajar todo de la misma version.
+local function latestCommit()
+  local body = get(("https://api.github.com/repos/%s/%s/commits/%s"):format(OWNER, REPO, BRANCH))
+  if not body then return nil end
+  return body:match('"sha"%s*:%s*"(%x+)"')
+end
+
+local function download(base, path, skipIfExists)
   if skipIfExists and fs.exists(path) then
     print("  = " .. path .. " (ya existe, no lo toco)")
     return true
   end
-  local res, err = http.get(REPO .. path)
-  if not res then
+  local body, err = get(base .. path)
+  if not body then
     printError("  x " .. path .. ": " .. tostring(err))
     return false
   end
   local dir = fs.getDir(path)
   if dir ~= "" and not fs.exists(dir) then fs.makeDir(dir) end
-  local f = fs.open(path, "w")
-  f.write(res.readAll())
-  f.close()
-  res.close()
+  local file = fs.open(path, "w")
+  file.write(body)
+  file.close()
   print("  + " .. path)
   return true
 end
@@ -44,13 +61,23 @@ if not http then
   return
 end
 
-print("bajando cc-organizer...")
+local commit = latestCommit()
+local base
+if commit then
+  base = ("https://raw.githubusercontent.com/%s/%s/%s/"):format(OWNER, REPO, commit)
+  print("bajando cc-organizer @ " .. commit:sub(1, 7))
+else
+  base = ("https://raw.githubusercontent.com/%s/%s/%s/"):format(OWNER, REPO, BRANCH)
+  print("no pude consultar el commit; bajando de la rama " .. BRANCH)
+  print("(si algo queda viejo, es el cache de GitHub: reintenta en 5 min)")
+end
+
 local ok = true
-for _, path in ipairs(FILES) do ok = download(path, false) and ok end
-for _, path in ipairs(ONCE) do ok = download(path, true) and ok end
+for _, path in ipairs(FILES) do ok = download(base, path, false) and ok end
+for _, path in ipairs(ONCE) do ok = download(base, path, true) and ok end
 
 if ok then
   print("listo. reinicia la computadora con: reboot")
 else
-  printError("hubo errores, revisa la URL del repo en install.lua")
+  printError("hubo errores; revisa la conexion y volve a correr install")
 end

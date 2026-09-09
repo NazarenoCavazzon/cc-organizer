@@ -31,6 +31,10 @@ wget https://raw.githubusercontent.com/NazarenoCavazzon/cc-organizer/main/instal
 install
 ```
 
+El instalador consulta el ultimo commit y baja todo pineado a ese SHA. Es a
+proposito: las URLs de rama de `raw.githubusercontent.com` quedan cacheadas unos
+minutos, y sin eso "actualizo y sigue igual" es lo normal.
+
 O copiando los archivos a `<mundo>/computercraft/computer/<ID>/`.
 
 La primera vez, si los cofres de `config.lua` no estan en la red, se abre solo un
