@@ -6,10 +6,12 @@
 local REPO = "https://raw.githubusercontent.com/NazarenoCavazzon/cc-organizer/main/"
 
 local FILES = {
+  "install.lua",  -- se actualiza a si mismo para que la lista no quede vieja
   "startup.lua",
   "lib/items.lua",
   "lib/storage.lua",
   "lib/ui.lua",
+  "lib/setup.lua",
 }
 
 -- config.lua no se pisa: ahi estan los nombres de tus cofres.
@@ -46,7 +48,7 @@ for _, path in ipairs(FILES) do ok = download(path, false) and ok end
 for _, path in ipairs(ONCE) do ok = download(path, true) and ok end
 
 if ok then
-  print("listo. edita config.lua y reinicia la computadora")
+  print("listo. reinicia la computadora con: reboot")
 else
   printError("hubo errores, revisa la URL del repo en install.lua")
 end
