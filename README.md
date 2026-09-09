@@ -95,7 +95,12 @@ computadora en vez de conectados por cable, entrada/salida que no existen, sin c
 de almacenamiento, o el almacenamiento realmente lleno) y la ocupacion de cada cofre.
 El mismo chequeo corre al arrancar y avisa antes de abrir la interfaz.
 
-El error mas comun es tener el cofre de entrada **pegado** a la computadora: en ese caso
+El error mas comun es que los modems **no esten unidos entre si con networking
+cable**. Un modem suelto es su propia red: la computadora los ve a todos (porque
+los toca), pero un cofre de una red no puede moverle items a un cofre de otra, y
+no se guarda nada. En el diagnostico esos cofres salen marcados como `OTRA RED`.
+
+El otro error comun es tener el cofre de entrada **pegado** a la computadora: en ese caso
 su nombre es un lado (`top`, `left`, `back`...) en vez de `minecraft:chest_N`, y ningun
 otro cofre de la red puede sacarle items. Se arregla poniendole un modem cableado al
 cofre, activandolo con click derecho, y eligiendolo de nuevo con **F9**.

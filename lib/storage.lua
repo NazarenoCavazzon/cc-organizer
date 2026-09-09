@@ -231,6 +231,18 @@ function storage.store()
   return moved, left
 end
 
+--- Slot vacio del cofre de entrada: sirve para probar si otro cofre lo alcanza
+--- sin mover ningun item (pullItems sobre un slot vacio devuelve 0).
+local function probeSlot(inv)
+  local okL, list = pcall(inv.list)
+  local okS, size = pcall(inv.size)
+  if not okL or not okS or not list or not size then return nil end
+  for slot = 1, size do
+    if not list[slot] then return slot end
+  end
+  return nil
+end
+
 --- Revision del armado: devuelve los problemas encontrados y el estado por cofre.
 function storage.diagnose()
   local report = { problems = {}, chests = {} }
@@ -254,17 +266,33 @@ function storage.diagnose()
     problem("no hay cofres de almacenamiento: conecta mas cofres con modem")
   end
 
-  local sideChests = 0
+  -- Prueba real: cada cofre tiene que poder sacarle items al de entrada. Si no
+  -- lo alcanza es que estan en redes de cable distintas.
+  local inv = peripheral.wrap(cfg.input)
+  local slot = inv and probeSlot(inv)
+
+  local sideChests, unreachable = 0, 0
   for _, c in ipairs(chests) do
     local used = 0
     for _ in pairs(contents[c.name] or {}) do used = used + 1 end
-    report.chests[#report.chests + 1] = { name = c.name, size = c.size or 0, used = used }
+    local entry = { name = c.name, size = c.size or 0, used = used, reachable = true }
+    if slot then
+      entry.reachable = pcall(c.wrap.pullItems, cfg.input, slot)
+      if not entry.reachable then unreachable = unreachable + 1 end
+    end
+    report.chests[#report.chests + 1] = entry
     if SIDES[c.name] then sideChests = sideChests + 1 end
     if (c.size or 0) == 0 then problem("no puedo leer el tamano de %s", c.name) end
   end
   if sideChests > 0 then
     problem("%d cofre(s) estan pegados a la computadora en vez de la red", sideChests)
   end
+  if unreachable > 0 then
+    problem("%d cofre(s) no alcanzan al cofre de entrada:", unreachable)
+    problem("  estan en OTRA red de cables. Uni todos los modems entre si")
+    problem("  con networking cable (tocar la computadora no alcanza)")
+  end
+  report.unreachable = unreachable
 
   local s = storage.space()
   if #chests > 0 and s.free == 0 then

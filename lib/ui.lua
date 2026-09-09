@@ -208,7 +208,8 @@ local function showDiagnostics()
   lines[#lines + 1] = ("salida:  %s"):format(cfg.output)
   lines[#lines + 1] = ("cofres de almacenamiento: %d"):format(#report.chests)
   for _, c in ipairs(report.chests) do
-    lines[#lines + 1] = ("  %-28s %2d/%2d slots"):format(c.name, c.used, c.size)
+    lines[#lines + 1] = ("  %-24s %2d/%2d slots %s")
+      :format(c.name, c.used, c.size, c.reachable and "" or "OTRA RED")
   end
   overlay("diagnostico", lines)
 end

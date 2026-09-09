@@ -239,6 +239,36 @@ test("detecta el cofre de entrada pegado a la computadora", function()
     "el diagnostico explica el problema: " .. problems)
 end)
 
+test("detecta cofres en otra red de cables", function()
+  -- El cofre esta en la red del jugador pero colgado de otro modem suelto:
+  -- la computadora lo ve, pero el cofre de entrada no lo alcanza.
+  mock.reset({
+    { name = IN, size = 27 },
+    { name = OUT, size = 27 },
+    { name = "minecraft:chest_0", size = 27, network = "otra" },
+  })
+  package.loaded["lib.storage"] = nil
+  package.loaded["lib.items"] = nil
+  require("lib.items").reset()
+  local storage = require("lib.storage")
+  storage.init({ input = IN, output = OUT, ignore = {} })
+  storage.refresh()
+
+  eq(storage.space().chests, 1, "la computadora igual lo ve")
+  mock.give(IN, "minecraft:cobblestone", 155)
+
+  local moved, left, err = storage.store()
+  eq(moved, 0, "no puede mover nada")
+  eq(left, 155, "queda todo en la entrada")
+  check(err:find("does not exist", 1, true) ~= nil, "propaga el error del juego: " .. tostring(err))
+
+  local report = storage.diagnose()
+  eq(report.unreachable, 1, "el diagnostico cuenta el cofre inalcanzable")
+  eq(report.chests[1].reachable, false, "y lo marca en la lista")
+  local problems = table.concat(report.problems, " | ")
+  check(problems:find("OTRA red de cables", 1, true) ~= nil, "lo explica: " .. problems)
+end)
+
 test("reporta el error real de un cofre que rechaza el movimiento", function()
   local storage = setup({ { name = "minecraft:chest_0", size = 27 } })
   mock.chest("minecraft:chest_0").pullItems = function() error("Inventory is locked", 0) end

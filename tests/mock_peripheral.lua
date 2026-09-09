@@ -51,8 +51,8 @@ local function insert(chest, item, count)
   return placed
 end
 
-local function newChest(name, size)
-  local c = { __name = name, __size = size, __slots = {} }
+local function newChest(name, size, network)
+  local c = { __name = name, __size = size, __slots = {}, __network = network or "main" }
 
   function c.size() return c.__size end
 
@@ -77,6 +77,10 @@ local function newChest(name, size)
     if SIDES[fromName] then error("Target '" .. fromName .. "' does not exist", 0) end
     local from = registry[fromName]
     if not from then error("no such peripheral: " .. tostring(fromName)) end
+    -- Cofres en redes de cable distintas no se ven entre si.
+    if from.__network ~= c.__network then
+      error("Target '" .. fromName .. "' does not exist", 0)
+    end
     local it = from.__slots[fromSlot]
     if not it then return 0 end
     local want = math.min(limit or it.count, it.count)
@@ -99,7 +103,7 @@ end
 function mock.reset(spec)
   registry, order = {}, {}
   for _, s in ipairs(spec) do
-    registry[s.name] = newChest(s.name, s.size)
+    registry[s.name] = newChest(s.name, s.size, s.network)
     order[#order + 1] = s.name
   end
 
