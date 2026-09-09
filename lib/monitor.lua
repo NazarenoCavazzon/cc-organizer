@@ -15,10 +15,13 @@ monitor.status = { state = "sin arrancar" }
 --- Barra de ocupacion: mas legible de lejos que "151/162".
 local function bar(screen, x, y, width, used, total)
   local filled = total > 0 and math.floor(width * used / total + 0.5) or 0
+  -- Sin color, cualquier fondo que no sea negro se dibuja blanco: si el vacio
+  -- tambien fuera gris, la barra seria un rectangulo blanco sin informacion.
+  local emptyBg = screen.colour and colours.grey or colours.black
   screen:paint(colours.white, colours.lime)
   screen:at(x, y, string.rep(" ", math.min(filled, width)))
   if filled < width then
-    screen:paint(colours.white, colours.grey)
+    screen:paint(colours.white, emptyBg)
     screen:at(x + filled, y, string.rep(" ", width - filled))
   end
 end

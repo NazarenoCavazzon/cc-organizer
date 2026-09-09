@@ -81,7 +81,9 @@ solo.
 ## Panel en un monitor
 
 Si hay un monitor en la red (o pegado a la computadora) se dibuja solo un panel
-de solo lectura con el stock, una barra de ocupacion y los cofres. Se actualiza
+de solo lectura con el stock, una barra de ocupacion y los cofres. Anda igual en
+un monitor comun: sin color la barra se dibuja blanco sobre negro en vez de dos
+grises que se verian iguales. Se actualiza
 cuando algo cambia y cada 5 segundos, y se acomoda al tamano del monitor: usa
 tantas columnas como entren. No hay que configurar nada; si conectas el monitor
 con el programa andando, lo detecta.

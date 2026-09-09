@@ -174,7 +174,10 @@ function dialog.number(opts)
     for _, preset in ipairs(presets) do
       local label = " " .. preset.label .. " "
       if bx + #label <= x + w - 1 then
-        screen:paint(colours.black, colours.lightGrey)
+        -- La caja ya es blanca en monocromo: los botones tienen que ir al
+        -- reves (fondo negro) o desaparecen contra el fondo.
+        screen:paint(screen.colour and colours.black or colours.white,
+                     screen.colour and colours.lightGrey or colours.black)
         screen:at(bx, row, label)
         buttons[#buttons + 1] = { x1 = bx, x2 = bx + #label - 1, y = row, fill = preset.value }
         bx = bx + #label + 1
@@ -188,10 +191,11 @@ function dialog.number(opts)
     local confirmX = cancelX - 1 - #confirm
     screen:paint(colours.white, colours.grey)
     screen:at(x + 1, row, string.rep(" ", w - 2))
-    screen:paint(colours.black, colours.lime)
+    screen:paint(screen.colour and colours.black or colours.white,
+                 screen.colour and colours.lime or colours.black)
     screen:at(confirmX, row, confirm)
     buttons[#buttons + 1] = { x1 = confirmX, x2 = confirmX + #confirm - 1, y = row, confirm = true }
-    screen:paint(colours.white, colours.red)
+    screen:paint(colours.white, screen.colour and colours.red or colours.black)
     screen:at(cancelX, row, cancel)
     buttons[#buttons + 1] = { x1 = cancelX, x2 = cancelX + #cancel - 1, y = row, cancel = true }
     row = row + 1

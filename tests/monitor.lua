@@ -13,8 +13,9 @@ local IN, OUT = "minecraft:chest_in", "minecraft:chest_out"
 
 --- Monitor de mentira: guarda lo dibujado en una grilla propia.
 local function fakeMonitor(width, height, colour)
-  local grid = {}
+  local grid, bgGrid = {}, {}
   local cx, cy = 1, 1
+  local bg = colours.black
   if colour == nil then colour = true end
   -- Un monitor normal solo acepta blanco, negro y grises: cualquier otro color
   -- tira "Colour not supported", igual que en el juego.
@@ -27,8 +28,11 @@ local function fakeMonitor(width, height, colour)
   end
   local function blank()
     for y = 1, height do
-      grid[y] = {}
-      for x = 1, width do grid[y][x] = " " end
+      grid[y], bgGrid[y] = {}, {}
+      for x = 1, width do
+        grid[y][x] = " "
+        bgGrid[y][x] = colours.black
+      end
     end
   end
   blank()
@@ -39,16 +43,20 @@ local function fakeMonitor(width, height, colour)
     setCursorPos = function(x, y) cx, cy = math.floor(x), math.floor(y) end,
     setCursorBlink = function() end,
     setTextColour = check,
-    setBackgroundColour = check,
+    setBackgroundColour = function(c) check(c) bg = c end,
     clear = blank,
     write = function(s)
       if cy < 1 or cy > height then return end
       for i = 1, #s do
         local x = cx + i - 1
-        if x >= 1 and x <= width then grid[cy][x] = s:sub(i, i) end
+        if x >= 1 and x <= width then
+          grid[cy][x] = s:sub(i, i)
+          bgGrid[cy][x] = bg
+        end
       end
       cx = cx + #s
     end,
+    bgAt = function(x, y) return bgGrid[y] and bgGrid[y][x] end,
     text = function()
       local lines = {}
       for y = 1, height do lines[y] = table.concat(grid[y]) end
@@ -138,6 +146,23 @@ test("el diagnostico cuenta que esta pasando con el monitor", function()
   eq(monitor.status.state, "dibujando", "con monitor, dibujando")
   eq(monitor.status.name, "monitor_0", "con el nombre de la red")
   eq(monitor.status.width, 50, "y el tamano")
+end)
+
+test("la barra de ocupacion se distingue en un monitor sin color", function()
+  -- Con color el vacio va gris; sin color tiene que ir negro, o el lleno y el
+  -- vacio se dibujan los dos blancos y la barra no dice nada.
+  for _, colour in ipairs({ true, false }) do
+    local storage = setup({ ["minecraft:cobblestone"] = 300 })
+    local device = fakeMonitor(50, 20, colour)
+    device.setTextColor, device.setBackgroundColor = device.setTextColour, device.setBackgroundColour
+    monitor.draw(draw.new(device, function() end, colour), storage)
+
+    -- 6 de 54 slots: el principio de la barra esta lleno y el medio vacio.
+    -- Comparar dos puntos dentro de la barra, no el resto de la linea.
+    local lleno, vacio = device.bgAt(3, 2), device.bgAt(20, 2)
+    check(lleno ~= vacio, ("con color=%s el lleno (%s) tiene que verse distinto del vacio (%s)")
+      :format(tostring(colour), tostring(lleno), tostring(vacio)))
+  end
 end)
 
 test("el panel muestra el stock y la ocupacion", function()
