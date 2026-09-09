@@ -51,6 +51,7 @@ test("la lista muestra el stock con nombres legibles", function()
   check(frame:find("200", 1, true) ~= nil, "la lista muestra la cantidad")
   check(frame:find("cc%-organizer") ~= nil, "hay barra de titulo")
   check(frame:find("5/54 slots", 1, true) ~= nil, "el titulo muestra la ocupacion")
+  check(frame:find("2 tipos", 1, true) ~= nil, "el titulo cuenta los tipos de item")
 end)
 
 test("escribir filtra la lista en vivo", function()
@@ -66,7 +67,7 @@ test("escribir filtra la lista en vivo", function()
   check(frame:find("Oak Log", 1, true) ~= nil, "queda el que matchea")
   check(frame:find("Cobblestone", 1, true) == nil, "se va el que no matchea")
   check(frame:find("buscar: oak", 1, true) ~= nil, "se ve lo que escribiste")
-  check(frame:find("1 item", 1, true) ~= nil, "cuenta los resultados")
+  check(frame:find("1/2 tipos", 1, true) ~= nil, "el titulo cuenta filtrados sobre el total")
 end)
 
 test("backspace y escape limpian la busqueda", function()
@@ -78,14 +79,15 @@ test("backspace y escape limpian la busqueda", function()
   ui.run(storage, cfg)
 
   local frame = mterm.lastFrame()
-  check(frame:find("buscar:%s+1 item") ~= nil, "la busqueda quedo vacia")
+  check(frame:find("buscar: _", 1, true) ~= nil, "la busqueda quedo vacia")
   check(frame:find("Cobblestone", 1, true) ~= nil, "volvio a aparecer el stock")
 end)
 
 test("enter pide la cantidad y entrega al cofre de salida", function()
   local storage, ui, cfg = setup({ ["minecraft:cobblestone"] = 200 })
   mterm.key(mterm.KEYS.enter)
-  mterm.input("10")
+  mterm.type("10") -- reemplaza el valor sugerido
+  mterm.key(mterm.KEYS.enter)
   mterm.key(mterm.KEYS.f10)
   ui.run(storage, cfg)
 
@@ -96,7 +98,8 @@ end)
 
 test("la cantidad por defecto es un stack", function()
   local storage, ui, cfg = setup({ ["minecraft:cobblestone"] = 200 })
-  mterm.key(mterm.KEYS.enter) -- sin mterm.input(): se acepta el default
+  mterm.key(mterm.KEYS.enter) -- abre el dialogo
+  mterm.key(mterm.KEYS.enter) -- acepta el stack sugerido
   mterm.key(mterm.KEYS.f10)
   ui.run(storage, cfg)
 
@@ -111,7 +114,8 @@ test("las flechas cambian el item seleccionado", function()
   -- La lista viene ordenada por cantidad: cobblestone primero.
   mterm.key(mterm.KEYS.down)
   mterm.key(mterm.KEYS.enter)
-  mterm.input("5")
+  mterm.type("5")
+  mterm.key(mterm.KEYS.enter)
   mterm.key(mterm.KEYS.f10)
   ui.run(storage, cfg)
 
@@ -147,7 +151,8 @@ test("F2 ordena por nombre", function()
   mterm.key(mterm.KEYS.f2)
   mterm.key(mterm.KEYS.home) -- F2 mantiene el item seleccionado, no la posicion
   mterm.key(mterm.KEYS.enter)
-  mterm.input("3")
+  mterm.type("3")
+  mterm.key(mterm.KEYS.enter)
   mterm.key(mterm.KEYS.f10)
   ui.run(storage, cfg)
 
@@ -164,6 +169,100 @@ test("F1 abre la ayuda y vuelve", function()
 
   check(mterm.anyFrame("atajos"), "se dibujo la ayuda")
   check(mterm.lastFrame():find("Cobblestone", 1, true) ~= nil, "volvio a la lista")
+end)
+
+test("el dialogo acepta cuentas como 64*2+16", function()
+  local storage, ui, cfg = setup({ ["minecraft:cobblestone"] = 300 })
+  mterm.key(mterm.KEYS.enter)
+  mterm.type("64*2+16")
+  mterm.key(mterm.KEYS.enter)
+  mterm.key(mterm.KEYS.f10)
+  ui.run(storage, cfg)
+
+  eq(mock.count(OUT, "minecraft:cobblestone"), 144, "resolvio la cuenta")
+end)
+
+test("el dialogo no deja pedir una cantidad invalida", function()
+  local storage, ui, cfg = setup({ ["minecraft:cobblestone"] = 300 })
+  mterm.key(mterm.KEYS.enter)
+  mterm.type("0")
+  mterm.key(mterm.KEYS.enter) -- rechazado, el dialogo sigue abierto
+  mterm.type("8")
+  mterm.key(mterm.KEYS.enter)
+  mterm.key(mterm.KEYS.f10)
+  ui.run(storage, cfg)
+
+  check(mterm.anyFrame("cantidad invalida"), "avisa en el dialogo")
+  eq(mock.count(OUT, "minecraft:cobblestone"), 8, "despues acepta el valor bueno")
+end)
+
+test("el dialogo recorta al stock disponible", function()
+  local storage, ui, cfg = setup({ ["minecraft:cobblestone"] = 20 })
+  mterm.key(mterm.KEYS.enter)
+  mterm.type("9999")
+  mterm.key(mterm.KEYS.enter)
+  mterm.key(mterm.KEYS.f10)
+  ui.run(storage, cfg)
+
+  eq(mock.count(OUT, "minecraft:cobblestone"), 20, "no pide mas de lo que hay")
+end)
+
+test("esc cancela el pedido sin mover nada", function()
+  local storage, ui, cfg = setup({ ["minecraft:cobblestone"] = 300 })
+  mterm.key(mterm.KEYS.enter)
+  mterm.key(mterm.KEYS.escape)
+  mterm.key(mterm.KEYS.f10)
+  ui.run(storage, cfg)
+
+  eq(mock.count(OUT, "minecraft:cobblestone"), 0, "no entrego nada")
+  eq(storage.count("minecraft:cobblestone"), 300, "el stock quedo igual")
+end)
+
+test("tab muestra donde esta guardado el item", function()
+  local storage, ui, cfg = setup({ ["minecraft:cobblestone"] = 300 })
+  mterm.key(mterm.KEYS.tab)
+  mterm.key(mterm.KEYS.enter)
+  mterm.key(mterm.KEYS.f10)
+  ui.run(storage, cfg)
+
+  check(mterm.anyFrame("guardado en"), "dice en cuantos cofres esta")
+  check(mterm.anyFrame("minecraft:chest_0"), "y en cuales")
+end)
+
+test("ctrl+u limpia la busqueda", function()
+  local storage, ui, cfg = setup({
+    ["minecraft:cobblestone"] = 200,
+    ["minecraft:oak_log"] = 64,
+  })
+  mterm.type("oak")
+  mterm.key(mterm.KEYS.leftCtrl)
+  mterm.key(mterm.KEYS.u)
+  mterm.key(mterm.KEYS.f10)
+  ui.run(storage, cfg)
+
+  local frame = mterm.lastFrame()
+  check(frame:find("buscar: _", 1, true) ~= nil, "la busqueda quedo vacia")
+  check(frame:find("Cobblestone", 1, true) ~= nil, "volvio todo el stock")
+end)
+
+test("ctrl+d sale", function()
+  local storage, ui, cfg = setup({ ["minecraft:cobblestone"] = 64 })
+  mterm.key(mterm.KEYS.leftCtrl)
+  mterm.key(mterm.KEYS.d)
+  ui.run(storage, cfg) -- si no sale, la cola de eventos se vacia y falla
+  eq(ui.reconfigure, false, "salio sin pedir reconfigurar")
+end)
+
+test("click en el orden alterna cantidad / alfabetico", function()
+  local storage, ui, cfg = setup({
+    ["minecraft:cobblestone"] = 300,
+    ["minecraft:andesite"] = 10,
+  })
+  mterm.click(1, 48, 2) -- el boton [cant] vive arriba a la derecha
+  mterm.key(mterm.KEYS.f10)
+  ui.run(storage, cfg)
+
+  check(mterm.lastFrame():find("%[A%-Z%]") ~= nil, "quedo en orden alfabetico")
 end)
 
 test("F3 muestra el diagnostico del armado", function()

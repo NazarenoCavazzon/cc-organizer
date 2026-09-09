@@ -9,6 +9,8 @@ local FILES = {
   "install.lua",  -- se actualiza a si mismo para que la lista no quede vieja
   "startup.lua",
   "lib/items.lua",
+  "lib/draw.lua",
+  "lib/dialog.lua",
   "lib/storage.lua",
   "lib/ui.lua",
   "lib/setup.lua",

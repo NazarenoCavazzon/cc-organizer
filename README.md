@@ -43,15 +43,21 @@ por vos. Se puede volver a abrir con **F9**.
 |---|---|
 | escribir | filtra la lista en vivo (por nombre o id) |
 | flechas / RePag / AvPag | mover la seleccion |
-| enter | pedir el item seleccionado (pregunta cantidad, default un stack) |
+| enter | pedir: abre el dialogo de cantidad |
+| tab | detalle del item: en que cofres esta y cuantos slots ocupa |
 | click | seleccionar; click de nuevo pide |
 | click derecho | pedir todo el stock de ese item |
-| esc | limpiar la busqueda |
+| esc / ctrl+u | limpiar la busqueda |
 | F1 | ayuda |
-| F2 | ordenar por cantidad / por nombre |
+| F2 | ordenar por cantidad / alfabetico (o click en `[cant]`) |
+| F3 | diagnostico del armado |
 | F5 | re-escanear la red |
 | F9 | reconfigurar entrada/salida |
-| F10 | salir |
+| F10 / ctrl+d | salir |
+
+En el dialogo de cantidad viene sugerido un stack, el primer numero que escribis
+lo reemplaza, y podes escribir cuentas (`64*3+16`). Tambien hay botones
+`1 / 16 / 64 / todo` clickeables, y las flechas suben y bajan de a uno.
 
 El cofre de entrada se vacia solo cada 3 segundos (`autoStoreInterval` en `config.lua`)
 y la pantalla avisa cuanto guardo. Si rompes o agregas un cofre, el indice se actualiza
@@ -70,7 +76,9 @@ startup.lua        arranque, guardado automatico y vigilancia de la red
 config.lua         cofres de entrada/salida e intervalo
 lib/storage.lua    indice, reparto y entrega
 lib/items.lua      claves de item, cache de nombres, busqueda
-lib/ui.lua         TUI
+lib/ui.lua         TUI: lista, busqueda y eventos
+lib/dialog.lua     ventanas modales (cantidad, detalle, ayuda)
+lib/draw.lua       helpers de dibujo sobre el buffer
 lib/setup.lua      asistente de configuracion
 install.lua        instalador via wget
 ```

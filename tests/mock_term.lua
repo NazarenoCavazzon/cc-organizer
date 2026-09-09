@@ -52,6 +52,7 @@ mt.KEYS = {
   up = 200, down = 208, pageUp = 201, pageDown = 209, home = 199, ["end"] = 207,
   enter = 28, numPadEnter = 156, backspace = 14, escape = 1, tab = 15,
   f1 = 59, f2 = 60, f3 = 61, f5 = 63, f9 = 67, f10 = 68, q = 16,
+  leftCtrl = 29, rightCtrl = 157, u = 22, d = 32,
 }
 
 function mt.reset()
@@ -63,36 +64,55 @@ function mt.reset()
   _G.colors = mt.COLOURS
   _G.keys = mt.KEYS
 
-  _G.term = {
-    getSize = function() return W, H end,
-    isColour = function() return true end,
-    isColor = function() return true end,
-    setCursorPos = function(x, y) cx, cy = math.floor(x), math.floor(y) end,
-    getCursorPos = function() return cx, cy end,
-    setCursorBlink = function() end,
-    setTextColour = function() end,
-    setTextColor = function() end,
-    setBackgroundColour = function() end,
-    setBackgroundColor = function() end,
-    write = function(s)
-      s = tostring(s)
-      if cy < 1 or cy > H then return end
-      for i = 1, #s do
-        local x = cx + i - 1
-        if x >= 1 and x <= W then screen[cy][x] = s:sub(i, i) end
-      end
-      cx = cx + #s
-    end,
-    clearLine = function()
-      if cy >= 1 and cy <= H then
-        for x = 1, W do screen[cy][x] = " " end
-      end
-    end,
-    clear = function()
-      -- Cada clear cierra un cuadro: asi los tests ven lo ultimo dibujado.
-      mt.frames[#mt.frames + 1] = mt.text()
-      screen = blank()
-    end,
+  local function newSurface()
+    local t
+    t = {
+      getSize = function() return W, H end,
+      isColour = function() return true end,
+      isColor = function() return true end,
+      setCursorPos = function(x, y) cx, cy = math.floor(x), math.floor(y) end,
+      getCursorPos = function() return cx, cy end,
+      setCursorBlink = function() end,
+      setTextColour = function() end,
+      setTextColor = function() end,
+      setBackgroundColour = function() end,
+      setBackgroundColor = function() end,
+      write = function(s)
+        s = tostring(s)
+        if cy < 1 or cy > H then return end
+        for i = 1, #s do
+          local x = cx + i - 1
+          if x >= 1 and x <= W then screen[cy][x] = s:sub(i, i) end
+        end
+        cx = cx + #s
+      end,
+      clearLine = function()
+        if cy >= 1 and cy <= H then
+          for x = 1, W do screen[cy][x] = " " end
+        end
+      end,
+      clear = function()
+        -- Cada clear cierra un cuadro: asi los tests ven lo ultimo dibujado.
+        mt.frames[#mt.frames + 1] = mt.text()
+        screen = blank()
+      end,
+      -- API de window: presentar el buffer congela el cuadro.
+      setVisible = function(visible)
+        if visible then mt.frames[#mt.frames + 1] = mt.text() end
+      end,
+      redraw = function() end,
+      restoreCursor = function() end,
+      reposition = function() end,
+    }
+    return t
+  end
+
+  _G.term = newSurface()
+  _G.term.current = function() return _G.term end
+  _G.term.redirect = function() end
+  _G.window = {
+    -- La ventana falsa escribe en la misma grilla: alcanza para los tests.
+    create = function() return newSurface() end,
   }
 
   _G.write = function(s) _G.term.write(s) end

@@ -370,6 +370,26 @@ function storage.findKeys(filter)
   return matches
 end
 
+--- Donde vive una clave: cuantas unidades y slots ocupa en cada cofre.
+function storage.locations(key)
+  local e = index[key]
+  if not e then return {} end
+  local byChest = {}
+  for _, loc in ipairs(e.locs) do
+    local entry = byChest[loc.chest]
+    if not entry then
+      entry = { chest = loc.chest, count = 0, slots = 0 }
+      byChest[loc.chest] = entry
+    end
+    entry.count = entry.count + loc.count
+    entry.slots = entry.slots + 1
+  end
+  local out = {}
+  for _, entry in pairs(byChest) do out[#out + 1] = entry end
+  table.sort(out, function(a, b) return a.count > b.count end)
+  return out
+end
+
 function storage.count(key)
   local e = index[key]
   return e and e.total or 0

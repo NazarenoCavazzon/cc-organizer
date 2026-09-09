@@ -1,55 +1,44 @@
--- TUI de pantalla completa: lista de stock con busqueda en vivo, seleccion
--- con teclado o mouse y pedidos al cofre de salida.
+-- Pantalla principal: lista de stock con busqueda en vivo, orden alfabetico o
+-- por cantidad, detalle del item y pedidos con cantidad libre.
 --
--- Layout (terminal de 51x19 en una Advanced Computer):
---   1        barra de titulo con la ocupacion
---   2        linea de busqueda
---   3..H-2   lista de items + barra de scroll
+-- Se dibuja sobre un buffer de window y se presenta de una sola vez, asi que no
+-- parpadea aunque se redibuje entera en cada evento.
+--
+-- Layout (51x19 en una Advanced Computer):
+--   1        titulo con tipos y ocupacion
+--   2        busqueda + orden actual (clickeable)
+--   3..H-2   lista + barra de scroll
 --   H-1      ultimo mensaje
 --   H        atajos
 
 local items = require("lib.items")
+local draw = require("lib.draw")
+local dialog = require("lib.dialog")
 
 local ui = {}
 
 local storage, cfg
-local W, H
+local win, W, H
 local colour = false
 local query = ""
 local rows = {}
 local sel, top = 1, 1
 local sortByName = false
 local message, messageColour
+local ctrlDown = false
 local dirty, running = true, true
+local sortButton = { x1 = 0, x2 = -1 }
 
--- Los mensajes del guardado automatico llegan desde otra corrutina.
+-- Los avisos del guardado automatico llegan desde otra corrutina.
 local pending = {}
-
-local function paint(fg, bg)
-  if colour then
-    term.setTextColour(fg)
-    term.setBackgroundColour(bg)
-  else
-    -- Las computadoras normales solo tienen blanco y negro.
-    local inverted = bg ~= colours.black
-    term.setTextColour(inverted and colours.black or colours.white)
-    term.setBackgroundColour(inverted and colours.white or colours.black)
-  end
-end
-
-local function fit(s, w)
-  if #s > w then return s:sub(1, w) end
-  return s .. string.rep(" ", w - #s)
-end
 
 local function listHeight()
   return math.max(1, H - 4)
 end
 
---- Cantidad compacta para que entre en la columna: 12345 -> "12.3k"
+--- Cantidad compacta para que entre en la columna.
 local function shortCount(n)
   if n < 100000 then return tostring(n) end
-  if n < 10000000 then return ("%.1fk"):format(n / 1000) end
   return ("%dk"):format(n // 1000)
 end
 
@@ -58,10 +47,17 @@ local function setMessage(text, c)
   dirty = true
 end
 
---- Aviso desde fuera del bucle de eventos (guardado automatico, red).
 function ui.notify(msg)
   pending[#pending + 1] = msg
   os.queueEvent("organizer_update")
+end
+
+local function clampView()
+  local h = listHeight()
+  sel = math.max(1, math.min(math.max(1, #rows), sel))
+  if sel < top then top = sel end
+  if sel > top + h - 1 then top = sel - h + 1 end
+  top = math.max(1, math.min(top, math.max(1, #rows - h + 1)))
 end
 
 local function recompute(keepSelection)
@@ -76,121 +72,106 @@ local function recompute(keepSelection)
       if r.key == previous then sel = i break end
     end
   end
-  local h = listHeight()
-  top = math.max(1, math.min(top, math.max(1, #rows - h + 1)))
-  if sel < top then top = sel end
-  if sel > top + h - 1 then top = sel - h + 1 end
+  clampView()
   dirty = true
 end
 
 local function drawHeader()
   local s = storage.space()
-  local right = ("%d/%d slots  %d cofres"):format(s.used, s.slots, s.chests)
-  paint(colours.black, colour and colours.cyan or colours.white)
-  term.setCursorPos(1, 1)
-  term.write(fit(" cc-organizer", W - #right - 1) .. right .. " ")
+  local total = #storage.stock()
+  local tipos = query ~= "" and ("%d/%d tipos"):format(#rows, total) or ("%d tipos"):format(total)
+  local right = ("%s   %d/%d slots"):format(tipos, s.used, s.slots)
+  draw.paint(colours.black, colours.cyan)
+  draw.at(1, 1, draw.fit(" cc-organizer", W))
+  draw.right(W - 1, 1, right)
 end
 
 local function drawSearch()
-  paint(colours.white, colours.black)
-  term.setCursorPos(1, 2)
-  term.clearLine()
-  paint(colours.lightGrey, colours.black)
-  term.write("buscar: ")
-  paint(colours.white, colours.black)
-  term.write(query)
-  local tag = sortByName and "A-Z" or "cant"
-  local count = ("%d %s  %s"):format(#rows, #rows == 1 and "item" or "items", tag)
-  paint(colours.grey, colours.black)
-  term.setCursorPos(math.max(1, W - #count), 2)
-  term.write(count)
+  draw.paint(colours.white, colours.black)
+  draw.at(1, 2, string.rep(" ", W))
+  draw.paint(colours.lightGrey, colours.black)
+  draw.at(1, 2, "buscar: ")
+  draw.paint(colours.white, colours.black)
+  draw.at(9, 2, query .. "_")
+
+  local label = sortByName and "[A-Z]" or "[cant]"
+  sortButton.x1, sortButton.x2 = W - #label, W - 1
+  draw.paint(colours.black, colour and colours.lightGrey or colours.white)
+  draw.at(sortButton.x1, 2, label)
 end
 
 local function drawList()
   local h = listHeight()
+  local thumbFrom, thumbSize
+  if #rows > h then
+    thumbSize = math.max(1, math.floor(h * h / #rows))
+    thumbFrom = math.floor((top - 1) * (h - thumbSize) / math.max(1, #rows - h) + 0.5)
+  end
+
   for i = 0, h - 1 do
     local y = 3 + i
     local entry = rows[top + i]
     local selected = (top + i) == sel
-    paint(selected and colours.black or colours.white,
-          selected and (colour and colours.lightGrey or colours.white) or colours.black)
-    term.setCursorPos(1, y)
+    local bg = selected and (colour and colours.cyan or colours.white) or colours.black
+    local fg = selected and colours.black or colours.white
+
+    draw.paint(fg, bg)
+    draw.at(1, y, string.rep(" ", W - 1))
     if entry then
-      local count = shortCount(entry.total)
-      local line = ("%7s  %s"):format(count, entry.display)
-      term.write(fit(line, W - 1))
-    else
-      term.write(string.rep(" ", W - 1))
+      draw.paint(selected and colours.black or colours.yellow, bg)
+      draw.right(7, y, shortCount(entry.total))
+      draw.paint(fg, bg)
+      draw.at(9, y, draw.fit(entry.display, W - 10))
     end
-    -- Barra de scroll en la ultima columna.
-    paint(colours.grey, colours.black)
-    local bar = " "
-    if #rows > h then
-      local from = math.floor((top - 1) / #rows * h)
-      local size = math.max(1, math.floor(h / #rows * h))
-      if i >= from and i < from + size then bar = colour and "\149" or "|" end
-    end
-    term.write(bar)
+
+    -- Barra de scroll.
+    local track = colour and colours.grey or colours.black
+    local thumb = colour and colours.lightGrey or colours.white
+    local isThumb = thumbFrom and i >= thumbFrom and i < thumbFrom + thumbSize
+    draw.paint(colours.white, thumbFrom and (isThumb and thumb or track) or colours.black)
+    draw.at(W, y, " ")
+  end
+
+  if #rows == 0 then
+    local text = query ~= "" and ("sin resultados para '" .. query .. "'") or "el almacenamiento esta vacio"
+    draw.paint(colours.grey, colours.black)
+    draw.at(math.max(1, math.floor((W - #text) / 2)), 3 + math.floor(h / 2), text)
   end
 end
 
-local function drawMessage()
-  paint(messageColour or colours.lightGrey, colours.black)
-  term.setCursorPos(1, H - 1)
-  term.clearLine()
-  if message then term.write(fit(message, W)) end
+local function drawFooter()
+  draw.paint(messageColour or colours.lightGrey, colours.black)
+  draw.at(1, H - 1, draw.fit(message or "", W))
+  draw.paint(colours.black, colour and colours.grey or colours.white)
+  draw.at(1, H, draw.fit(" enter pedir   tab detalle   F1 ayuda   F10 salir", W))
 end
 
-local function drawHelp()
-  paint(colours.black, colour and colours.grey or colours.white)
-  term.setCursorPos(1, H)
-  term.write(fit(" enter pedir  F1 ayuda  F3 diag  F5 scan  F10 salir", W))
-end
-
-local function draw()
+local function render()
   drawHeader()
   drawSearch()
   drawList()
-  drawMessage()
-  drawHelp()
-  -- El cursor vive en la busqueda: se siente como un campo de texto.
-  paint(colours.white, colours.black)
-  term.setCursorPos(math.min(9 + #query, W), 2)
-  term.setCursorBlink(true)
+  drawFooter()
+  draw.cursor(1, 1, false)
+  draw.present()
   dirty = false
 end
 
---- Ventana modal simple; devuelve cuando el usuario aprieta una tecla.
-local function overlay(title, lines)
-  local maxLines = math.max(1, H - 5)
-  if #lines > maxLines then
-    local cut = {}
-    for i = 1, maxLines - 1 do cut[i] = lines[i] end
-    cut[maxLines] = ("... y %d lineas mas"):format(#lines - maxLines + 1)
-    lines = cut
-  end
-  local w = #title + 4
-  for _, l in ipairs(lines) do w = math.max(w, #l + 4) end
-  w = math.min(w, W)
-  local h = #lines + 4
-  local x = math.floor((W - w) / 2) + 1
-  local y = math.floor((H - h) / 2) + 1
-
-  paint(colours.black, colour and colours.cyan or colours.white)
-  term.setCursorPos(x, y)
-  term.write(fit(" " .. title, w))
-  for i, l in ipairs(lines) do
-    paint(colours.white, colour and colours.grey or colours.black)
-    term.setCursorPos(x, y + i)
-    term.write(fit(" " .. l, w))
-  end
-  paint(colours.lightGrey, colour and colours.grey or colours.black)
-  term.setCursorPos(x, y + #lines + 1)
-  term.write(fit("", w))
-  term.setCursorPos(x, y + #lines + 2)
-  term.write(fit(" (cualquier tecla para cerrar)", w))
-  term.setCursorBlink(false)
-  os.pullEvent("key")
+local function showHelp()
+  dialog.message("atajos", {
+    "escribir        filtra la lista",
+    "flechas         mover la seleccion",
+    "rePag / avPag   pagina entera",
+    "enter           pedir (cantidad libre)",
+    "tab             detalle: donde esta guardado",
+    "click           elegir; de nuevo, pedir",
+    "click derecho   pedir todo el stock",
+    "esc / ctrl+u    limpiar la busqueda",
+    "F2              orden: cantidad / A-Z",
+    "F3              diagnostico del armado",
+    "F5              re-escanear la red",
+    "F9              reconfigurar entrada/salida",
+    "F10 / ctrl+d    salir",
+  })
   dirty = true
 end
 
@@ -209,44 +190,31 @@ local function showDiagnostics()
   lines[#lines + 1] = ("cofres de almacenamiento: %d"):format(#report.chests)
   for _, c in ipairs(report.chests) do
     lines[#lines + 1] = ("  %-24s %2d/%2d slots %s")
-      :format(c.name, c.used, c.size, c.reachable and "" or "OTRA RED")
+      :format(c.chest or c.name, c.used, c.size, c.reachable and "" or "OTRA RED")
   end
-  overlay("diagnostico", lines)
-end
-
-local function showHelp()
-  overlay("atajos", {
-    "escribir       filtra la lista",
-    "flechas        mover la seleccion",
-    "reAv / rePag   pagina",
-    "enter          pedir (pregunta cantidad)",
-    "click derecho  pedir todo el stock",
-    "esc            limpiar la busqueda",
-    "F2             ordenar por cantidad / nombre",
-    "F3             diagnostico del armado",
-    "F5             re-escanear la red",
-    "F9             reconfigurar entrada/salida",
-    "F10            salir",
-  })
-end
-
---- Pregunta en la linea de mensajes. Devuelve nil si el usuario cancela.
-local function ask(label, default)
-  paint(colours.white, colours.black)
-  term.setCursorPos(1, H - 1)
-  term.clearLine()
-  paint(colours.yellow, colours.black)
-  term.write(label)
-  paint(colours.white, colours.black)
-  term.setCursorBlink(true)
-  local answer = read(nil, nil, nil, default)
+  dialog.message("diagnostico", lines)
   dirty = true
-  if answer == nil or answer == "" then return nil end
-  return answer
 end
 
-local function request(entry, amount)
+local function showDetail()
+  local entry = rows[sel]
   if not entry then return end
+  local lines = {
+    entry.key,
+    ("%d unidades, apila de a %d"):format(entry.total, items.maxCount(entry.key)),
+    "",
+  }
+  local locations = storage.locations(entry.key)
+  lines[#lines + 1] = ("guardado en %d %s:"):format(#locations, #locations == 1 and "cofre" or "cofres")
+  for _, loc in ipairs(locations) do
+    lines[#lines + 1] = ("  %-24s %5d en %d %s")
+      :format(loc.chest, loc.count, loc.slots, loc.slots == 1 and "slot" or "slots")
+  end
+  dialog.message(entry.display, lines)
+  dirty = true
+end
+
+local function deliver(entry, amount)
   storage.busy = true
   local moved, reason = storage.take(entry.key, amount)
   storage.busy = false
@@ -264,26 +232,27 @@ end
 local function requestSelected()
   local entry = rows[sel]
   if not entry then return end
-  local default = math.min(entry.total, items.maxCount(entry.key))
-  local answer = ask(("cuantos %s? "):format(entry.display), tostring(default))
-  if not answer then
+  local amount = dialog.number({
+    title = entry.display,
+    info = {
+      ("hay %d en stock"):format(entry.total),
+      "podes escribir cuentas: 64*3+16",
+    },
+    default = math.min(entry.total, items.maxCount(entry.key)),
+    max = entry.total,
+  })
+  dirty = true
+  if not amount then
     setMessage("cancelado")
     return
   end
-  local amount = math.floor(tonumber(answer) or 0)
-  if amount <= 0 then
-    setMessage("cantidad invalida", colours.red)
-    return
-  end
-  request(entry, amount)
+  deliver(entry, amount)
 end
 
 local function move(delta)
   if #rows == 0 then return end
-  sel = math.max(1, math.min(#rows, sel + delta))
-  local h = listHeight()
-  if sel < top then top = sel end
-  if sel > top + h - 1 then top = sel - h + 1 end
+  sel = sel + delta
+  clampView()
   dirty = true
 end
 
@@ -295,7 +264,7 @@ end
 
 local function doRefresh()
   setMessage("escaneando la red...")
-  draw()
+  render()
   storage.busy = true
   local ok, err = pcall(storage.refresh)
   storage.busy = false
@@ -309,13 +278,21 @@ local function doRefresh()
 end
 
 local function onKey(key)
-  if key == keys.up then move(-1)
+  if key == keys.leftCtrl or key == keys.rightCtrl then ctrlDown = true return end
+
+  if ctrlDown and key == keys.u then
+    query = ""
+    recompute()
+  elseif ctrlDown and key == keys.d then
+    running = false
+  elseif key == keys.up then move(-1)
   elseif key == keys.down then move(1)
   elseif key == keys.pageUp then move(-listHeight())
   elseif key == keys.pageDown then move(listHeight())
-  elseif key == keys.home then sel, top = 1, 1; dirty = true
-  elseif key == keys["end"] then sel = #rows; move(0)
+  elseif key == keys.home then sel = 1; clampView(); dirty = true
+  elseif key == keys["end"] then sel = #rows; clampView(); dirty = true
   elseif key == keys.enter or key == keys.numPadEnter then requestSelected()
+  elseif key == keys.tab then showDetail()
   elseif key == keys.backspace then
     if #query > 0 then query = query:sub(1, -2); recompute() end
   elseif key == keys.escape then
@@ -329,12 +306,17 @@ local function onKey(key)
   end
 end
 
-local function onClick(button, _, y)
+local function onClick(button, x, y)
+  if y == 2 and x >= sortButton.x1 and x <= sortButton.x2 then
+    sortByName = not sortByName
+    recompute(true)
+    return
+  end
   local i = top + (y - 3)
   if y < 3 or y > H - 2 or not rows[i] then return end
   if button == 2 then
     sel = i
-    request(rows[i], rows[i].total)
+    deliver(rows[i], rows[i].total)
     return
   end
   if sel == i then
@@ -349,11 +331,18 @@ function ui.run(store, config)
   storage, cfg = store, config
   W, H = term.getSize()
   colour = term.isColour and term.isColour()
-  running, ui.reconfigure = true, false
-  query, sel, top = "", 1, 1
+  win = window.create(term.current(), 1, 1, W, H, false)
+  draw.attach(win, colour, function()
+    win.setVisible(true)
+    win.setVisible(false)
+  end)
 
+  running, ui.reconfigure = true, false
+  query, sel, top, ctrlDown = "", 1, 1, false
   term.setBackgroundColour(colours.black)
   term.clear()
+  draw.clear()
+
   recompute()
   local s = storage.space()
   setMessage(("listo: %d cofres, %d tipos de item"):format(s.chests, #rows))
@@ -363,7 +352,8 @@ function ui.run(store, config)
       setMessage(table.remove(pending, 1))
       recompute(true)
     end
-    if dirty then draw() end
+    if dirty then render() end
+
     local event = { os.pullEvent() }
     local name = event[1]
     if name == "char" then
@@ -371,20 +361,23 @@ function ui.run(store, config)
       recompute()
     elseif name == "key" then
       onKey(event[2])
+    elseif name == "key_up" then
+      if event[2] == keys.leftCtrl or event[2] == keys.rightCtrl then ctrlDown = false end
     elseif name == "mouse_click" then
       onClick(event[2], event[3], event[4])
     elseif name == "mouse_scroll" then
       scroll(event[2] * 3)
     elseif name == "term_resize" then
       W, H = term.getSize()
+      win.reposition(1, 1, W, H)
       recompute(true)
     elseif name == "organizer_update" then
       dirty = true
     end
   end
 
-  term.setCursorBlink(false)
-  paint(colours.white, colours.black)
+  term.setBackgroundColour(colours.black)
+  term.setTextColour(colours.white)
   term.clear()
   term.setCursorPos(1, 1)
 end
