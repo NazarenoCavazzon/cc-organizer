@@ -14,8 +14,8 @@ local order = {}
 local function maxCount(name) return MAXCOUNT[name] or 64 end
 
 local function displayName(name)
-  local short = name:match("[^:]+$")
-  return (short:gsub("_", " "):gsub("^%l", string.upper))
+  local short = name:match("[^:]+$"):gsub("_", " ")
+  return (short:gsub("(%w+)", function(word) return word:gsub("^%l", string.upper) end))
 end
 
 local function sameStack(a, b)

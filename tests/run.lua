@@ -4,24 +4,11 @@
 package.path = "./?.lua;./?/init.lua;" .. package.path
 
 local mock = require("tests.mock_peripheral")
+local h = require("tests.harness")
 
 local IN, OUT = "minecraft:chest_in", "minecraft:chest_out"
 
-local passed, failed = 0, 0
-local current
-
-local function check(ok, msg)
-  if ok then
-    passed = passed + 1
-  else
-    failed = failed + 1
-    print(("  FALLO [%s] %s"):format(current, msg))
-  end
-end
-
-local function eq(actual, expected, msg)
-  check(actual == expected, ("%s: esperaba %s, obtuve %s"):format(msg, tostring(expected), tostring(actual)))
-end
+local eq, test = h.eq, h.test
 
 --- Arma un mundo nuevo y devuelve un storage limpio.
 local function setup(chestSpec, config)
@@ -39,16 +26,6 @@ local function setup(chestSpec, config)
   storage.init(cfg)
   storage.refresh()
   return storage, items
-end
-
-local function test(name, fn)
-  current = name
-  print("* " .. name)
-  local ok, err = pcall(fn)
-  if not ok then
-    failed = failed + 1
-    print("  ERROR: " .. tostring(err))
-  end
 end
 
 test("descubre los cofres y excluye entrada/salida", function()
@@ -199,6 +176,8 @@ test("stock ordenado por cantidad y filtrable", function()
   eq(#storage.stock("oak"), 1, "filtro por id")
   eq(#storage.stock("Diamond"), 1, "filtro case-insensitive por displayName")
   eq(#storage.findKeys("minecraft:diamond"), 1, "match exacto")
+  eq(#storage.stock("in"), 0, "el namespace no cuenta: 'in' no matchea minecraft:")
+  eq(#storage.stock("minecraft:oak"), 1, "pero si lo escribis completo, si")
 end)
 
 test("el indice sobrevive a un cofre que desaparece", function()
@@ -224,6 +203,6 @@ test("el indice sobrevive a un cofre que desaparece", function()
   eq(storage.count("minecraft:cobblestone"), 36, "el stock refleja solo lo que sigue en la red")
 end)
 
-print()
-print(("%d ok, %d fallos"):format(passed, failed))
-os.exit(failed == 0 and 0 or 1)
+require("tests.tui")
+
+os.exit(h.summary() and 0 or 1)

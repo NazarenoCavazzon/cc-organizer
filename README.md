@@ -2,48 +2,78 @@
 
 Almacenamiento automatico para CC:Tweaked (1.16+): muchos cofres en una red de modems
 cableados, un cofre de entrada que se vacia solo y un cofre de salida para los pedidos.
+La interfaz es una TUI de pantalla completa con busqueda en vivo.
+
+```
+ cc-organizer                54/54 slots  2 cofres
+buscar: oak                          2 items  cant
+    384  Oak Log
+   2048  Oak Planks
+
+ 384 Oak Log -> minecraft:chest_1
+ enter pedir   F1 ayuda   F5 scan   F10 salir
+```
 
 ## Armado en el juego
 
-1. Una **Advanced Computer** con un modem cableado pegado.
-2. Un **modem cableado** en cada cofre, activado con click derecho (se pone rojo).
+1. Una **Advanced Computer** con un modem cableado pegado (el mouse y los colores
+   solo andan en las advanced).
+2. Un **modem cableado** en cada cofre, activado con click derecho (se ilumina).
 3. **Networking cable** uniendo todo.
 4. Dos cofres mas de la misma red: uno de entrada y uno de salida.
 
 ## Instalacion
 
-Copiar el repo a la computadora (o clonarlo en `.minecraft/saves/<mundo>/computercraft/computer/<id>/`).
-Al arrancar, correr `startup` y usar el comando `peripherals` para ver los nombres reales
-(`minecraft:chest_0`, etc.) y ponerlos en `config.lua`:
+Con el repo publico, desde la computadora:
 
-```lua
-input = "minecraft:chest_0",   -- donde tiras los items
-output = "minecraft:chest_1",  -- donde aparecen los pedidos
+```
+wget https://raw.githubusercontent.com/NazarenoCavazzon/cc-organizer/main/install.lua install.lua
+install
 ```
 
-Reiniciar la computadora: `startup.lua` corre solo al encender.
+O copiando los archivos a `<mundo>/computercraft/computer/<ID>/`.
 
-## Comandos
+La primera vez, si los cofres de `config.lua` no estan en la red, se abre solo un
+asistente para elegir cual es el de entrada y cual el de salida; guarda `config.lua`
+por vos. Se puede volver a abrir con **F9**.
 
-| comando | que hace |
+## Atajos
+
+| tecla | que hace |
 |---|---|
-| `stock [filtro]` | que hay guardado, ordenado por cantidad |
-| `find <texto>` | igual pero mostrando los ids completos |
-| `get <item> [n]` | manda n unidades al cofre de salida (default 64) |
-| `store` | vacia el cofre de entrada ahora mismo |
-| `space` | slots usados / libres |
-| `refresh` | re-escanea toda la red |
-| `peripherals` | nombres de la red, para configurar |
-| `exit` | salir |
+| escribir | filtra la lista en vivo (por nombre o id) |
+| flechas / RePag / AvPag | mover la seleccion |
+| enter | pedir el item seleccionado (pregunta cantidad, default un stack) |
+| click | seleccionar; click de nuevo pide |
+| click derecho | pedir todo el stock de ese item |
+| esc | limpiar la busqueda |
+| F1 | ayuda |
+| F2 | ordenar por cantidad / por nombre |
+| F5 | re-escanear la red |
+| F9 | reconfigurar entrada/salida |
+| F10 | salir |
 
-El cofre de entrada se vacia solo cada 3 segundos (`autoStoreInterval` en `config.lua`),
-asi que `store` es solo para apurarlo.
+El cofre de entrada se vacia solo cada 3 segundos (`autoStoreInterval` en `config.lua`)
+y la pantalla avisa cuanto guardo. Si rompes o agregas un cofre, el indice se actualiza
+solo.
 
 ## Como reparte los items
 
 Al guardar, cada stack va primero al cofre que **ya tiene ese item** con espacio (compacta
 stacks parciales) y si no, al cofre con **mas slots libres**. Items con NBT distinto
 (encantados, con durabilidad) se indexan por separado, igual que en el juego.
+
+## Estructura
+
+```
+startup.lua        arranque, guardado automatico y vigilancia de la red
+config.lua         cofres de entrada/salida e intervalo
+lib/storage.lua    indice, reparto y entrega
+lib/items.lua      claves de item, cache de nombres, busqueda
+lib/ui.lua         TUI
+lib/setup.lua      asistente de configuracion
+install.lua        instalador via wget
+```
 
 ## Tests
 
@@ -53,6 +83,7 @@ Sin Minecraft, con Lua local:
 lua tests/run.lua
 ```
 
-`tests/mock_peripheral.lua` simula la red de cofres (`list`, `size`, `pullItems`,
-`getItemDetail`) para probar el reparto, los limites de stack, el almacenamiento lleno,
-la entrega parcial y la consistencia del indice.
+`tests/mock_peripheral.lua` simula la red de cofres y `tests/mock_term.lua` una terminal
+de 51x19 con cola de eventos, asi que se testean tanto el reparto (stacks parciales,
+limites de stack, almacenamiento lleno, entrega parcial, cofre roto) como la TUI
+(busqueda, seleccion, pedidos, overlays, scroll).

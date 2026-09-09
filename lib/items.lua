@@ -50,10 +50,13 @@ function items.shortName(key)
 end
 
 --- true si el texto aparece en el id o en el nombre visible.
+--- El namespace se ignora salvo que lo escribas: si no, buscar "in" o "raf"
+--- matchearia "minecraft:" y por lo tanto todo el inventario.
 function items.matches(key, filter)
   if filter == nil or filter == "" then return true end
   filter = filter:lower()
-  if key:lower():find(filter, 1, true) then return true end
+  local id = filter:find(":", 1, true) and key or (key:match("^.-:(.*)$") or key)
+  if id:lower():find(filter, 1, true) then return true end
   local m = meta[key]
   return m ~= nil and m.displayName:lower():find(filter, 1, true) ~= nil
 end

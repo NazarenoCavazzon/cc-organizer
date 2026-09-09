@@ -6,22 +6,8 @@ package.path = ("/%s/?.lua;/%s/?/init.lua;"):format(dir, dir) .. package.path
 
 local config = require("config")
 local storage = require("lib.storage")
+local setup = require("lib.setup")
 local ui = require("lib.ui")
-
-local function check(name, label)
-  if peripheral.isPresent(name) then return true end
-  printError(("no encuentro el cofre de %s: %s"):format(label, name))
-  printError("corrige config.lua (el comando `peripherals` lista los nombres reales)")
-  return false
-end
-
-term.clear()
-term.setCursorPos(1, 1)
-print("escaneando la red...")
-storage.init(config)
-storage.refresh()
-check(config.input, "entrada")
-check(config.output, "salida")
 
 --- Vacia el cofre de entrada cada tanto sin pisar un comando en curso.
 local function autoStore()
@@ -46,22 +32,48 @@ end
 --- Un cofre agregado o roto en caliente invalida el indice.
 local function watchNetwork()
   while true do
-    local event, name = os.pullEvent()
+    local event = os.pullEvent()
     if event == "peripheral" or event == "peripheral_detach" then
       while storage.busy do os.sleep(0.2) end
       storage.busy = true
       local ok = pcall(storage.refresh)
       storage.busy = false
-      ui.notify(ok and ("red actualizada (" .. tostring(name) .. ")") or "fallo el re-escaneo de la red")
+      ui.notify(ok and "la red cambio, indice actualizado" or "fallo el re-escaneo de la red")
     end
   end
 end
 
-parallel.waitForAny(
-  function() ui.run(storage, config) end,
-  autoStore,
-  watchNetwork
-)
+local function configured()
+  return peripheral.isPresent(config.input) and peripheral.isPresent(config.output)
+end
+
+term.setBackgroundColour(colours.black)
+term.clear()
+term.setCursorPos(1, 1)
+
+if not configured() then
+  print("no encuentro los cofres de entrada/salida configurados")
+  os.sleep(1)
+  if not setup.run(config) then
+    printError("configuracion cancelada; edita config.lua a mano y reinicia")
+    return
+  end
+end
+
+repeat
+  print("escaneando la red...")
+  storage.init(config)
+  storage.refresh()
+
+  parallel.waitForAny(
+    function() ui.run(storage, config) end,
+    autoStore,
+    watchNetwork
+  )
+
+  -- F9 dentro de la TUI pide reconfigurar y volver a arrancar.
+  local again = ui.reconfigure and setup.run(config)
+until not again
 
 term.setTextColour(colours.white)
 print("cc-organizer detenido")
