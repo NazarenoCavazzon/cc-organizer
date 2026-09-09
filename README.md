@@ -51,17 +51,21 @@ por vos. Se puede volver a abrir con **F9**.
 | tab | detalle del item: en que cofres esta y cuantos slots ocupa |
 | click | seleccionar; click de nuevo pide |
 | click derecho | pedir todo el stock de ese item |
-| esc / ctrl+u | limpiar la busqueda |
+| ctrl+u | limpiar la busqueda |
 | F1 | ayuda |
 | F2 | ordenar por cantidad / alfabetico (o click en `[cant]`) |
 | F3 | diagnostico del armado |
 | F5 | re-escanear la red |
 | F9 | reconfigurar entrada/salida |
-| F10 / ctrl+d | salir |
+| ctrl+d | cancelar un dialogo |
+| F10 | salir |
+
+El **escape no se usa**: en CC cierra la GUI de la computadora y el programa
+nunca lo recibe. Para cancelar un dialogo es `ctrl+d` o el boton `cancelar`.
 
 En el dialogo de cantidad viene sugerido un stack, el primer numero que escribis
 lo reemplaza, y podes escribir cuentas (`64*3+16`). Tambien hay botones
-`1 / 16 / 64 / todo` clickeables, y las flechas suben y bajan de a uno.
+`1 / 16 / 64 / todo` y `cancelar` clickeables, y las flechas suben y bajan de a uno.
 
 El cofre de entrada se vacia solo cada 3 segundos (`autoStoreInterval` en `config.lua`)
 y la pantalla avisa cuanto guardo. Si rompes o agregas un cofre, el indice se actualiza

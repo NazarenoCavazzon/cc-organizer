@@ -207,15 +207,43 @@ test("el dialogo recorta al stock disponible", function()
   eq(mock.count(OUT, "minecraft:cobblestone"), 20, "no pide mas de lo que hay")
 end)
 
-test("esc cancela el pedido sin mover nada", function()
+test("ctrl+d cancela el pedido sin mover nada", function()
+  -- El escape no sirve: en CC cierra la GUI antes de llegar al programa.
   local storage, ui, cfg = setup({ ["minecraft:cobblestone"] = 300 })
   mterm.key(mterm.KEYS.enter)
-  mterm.key(mterm.KEYS.escape)
+  mterm.key(mterm.KEYS.leftCtrl)
+  mterm.key(mterm.KEYS.d)
+  mterm.key(mterm.KEYS.f10)
+  ui.run(storage, cfg)
+
+  check(mterm.anyFrame("ctrl+d cancela"), "el dialogo lo dice")
+  eq(mock.count(OUT, "minecraft:cobblestone"), 0, "no entrego nada")
+  eq(storage.count("minecraft:cobblestone"), 300, "el stock quedo igual")
+end)
+
+test("el boton cancelar del dialogo tambien cierra", function()
+  local storage, ui, cfg = setup({ ["minecraft:cobblestone"] = 300 })
+  mterm.key(mterm.KEYS.enter)
+  -- Si el click no cae en el boton, el dialogo queda abierto, se come el F10 y
+  -- el test explota al vaciarse la cola: la coordenada esta verificada.
+  mterm.click(1, 36, 10)
   mterm.key(mterm.KEYS.f10)
   ui.run(storage, cfg)
 
   eq(mock.count(OUT, "minecraft:cobblestone"), 0, "no entrego nada")
-  eq(storage.count("minecraft:cobblestone"), 300, "el stock quedo igual")
+end)
+
+test("ctrl+d cancela el dialogo sin cerrar el programa", function()
+  local storage, ui, cfg = setup({ ["minecraft:cobblestone"] = 300 })
+  mterm.key(mterm.KEYS.enter)
+  mterm.key(mterm.KEYS.leftCtrl)
+  mterm.key(mterm.KEYS.d)       -- cancela el dialogo, sigue en la lista
+  mterm.type("cob")             -- y la lista responde al teclado
+  mterm.key(mterm.KEYS.leftCtrl)
+  mterm.key(mterm.KEYS.d)       -- recien ahora sale
+  ui.run(storage, cfg)
+
+  check(mterm.lastFrame():find("buscar: cob", 1, true) ~= nil, "seguia en la lista")
 end)
 
 test("tab muestra donde esta guardado el item", function()

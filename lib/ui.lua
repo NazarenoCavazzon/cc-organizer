@@ -165,12 +165,15 @@ local function showHelp()
     "tab             detalle: donde esta guardado",
     "click           elegir; de nuevo, pedir",
     "click derecho   pedir todo el stock",
-    "esc / ctrl+u    limpiar la busqueda",
+    "ctrl+u          limpiar la busqueda",
     "F2              orden: cantidad / A-Z",
     "F3              diagnostico del armado",
     "F5              re-escanear la red",
     "F9              reconfigurar entrada/salida",
-    "F10 / ctrl+d    salir",
+    "ctrl+d          cancelar un dialogo",
+    "F10             salir",
+    "",
+    "(el escape no sirve: cierra la computadora)",
   })
   dirty = true
 end
@@ -296,6 +299,7 @@ local function onKey(key)
   elseif key == keys.backspace then
     if #query > 0 then query = query:sub(1, -2); recompute() end
   elseif key == keys.escape then
+    -- Minecraft se queda con el escape antes que nosotros, pero por si acaso.
     if #query > 0 then query = ""; recompute() end
   elseif key == keys.f1 then showHelp()
   elseif key == keys.f2 then sortByName = not sortByName; recompute(true)

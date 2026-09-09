@@ -46,6 +46,13 @@ local function line(x, y, width, text, fg)
   draw.at(x, y, draw.fit(" " .. text, width))
 end
 
+--- En CC el Escape cierra la GUI de la computadora y el programa nunca lo ve,
+--- asi que cancelar es ctrl+d (la convencion de artist). Se acepta escape igual
+--- por si alguna version si lo entrega.
+local function isCancel(key, ctrl)
+  return key == keys.escape or (ctrl and key == keys.d)
+end
+
 --- Caja informativa: se cierra con cualquier tecla o click.
 function dialog.message(title, lines)
   local W, H = draw.size()
@@ -83,6 +90,7 @@ function dialog.number(opts)
   -- que escribis lo reemplaza en vez de pegarse atras.
   local fresh = true
   local error_ = nil
+  local ctrl = false
   local presets = {
     { label = "1", value = 1 },
     { label = "16", value = 16 },
@@ -109,7 +117,7 @@ function dialog.number(opts)
     draw.at(x + 11, row, draw.fit(text .. "_", w - 12))
     row = row + 1
 
-    -- Botones de cantidad rapida.
+    -- Botones de cantidad rapida y cancelar.
     local buttons, bx = {}, x + 1
     draw.paint(colours.white, colours.grey)
     draw.at(x + 1, row, string.rep(" ", w - 2))
@@ -122,12 +130,19 @@ function dialog.number(opts)
         bx = bx + #label + 1
       end
     end
+    local cancel = " cancelar "
+    local cx = x + w - 1 - #cancel
+    if cx > bx then
+      draw.paint(colours.white, colours.red)
+      draw.at(cx, row, cancel)
+      buttons[#buttons + 1] = { x1 = cx, x2 = cx + #cancel - 1, y = row, cancel = true }
+    end
     row = row + 1
 
     if error_ then
       line(x, row, w, error_, colours.red)
     else
-      line(x, row, w, "enter confirma   esc cancela", colours.lightGrey)
+      line(x, row, w, "enter confirma   ctrl+d cancela", colours.lightGrey)
     end
 
     draw.cursor(1, 1, false)
@@ -135,13 +150,19 @@ function dialog.number(opts)
 
     local event, a, clickX, clickY = os.pullEvent()
     error_ = nil
-    if event == "char" then
+    if event == "key_up" then
+      if a == keys.leftCtrl or a == keys.rightCtrl then ctrl = false end
+    elseif event == "char" then
       if CHARS:find(a, 1, true) then
         text = (fresh and "" or text) .. a
         fresh = false
       end
     elseif event == "key" then
-      if a == keys.backspace then
+      if a == keys.leftCtrl or a == keys.rightCtrl then
+        ctrl = true
+      elseif isCancel(a, ctrl) then
+        return nil
+      elseif a == keys.backspace then
         text = fresh and "" or text:sub(1, -2)
         fresh = false
       elseif a == keys.enter or a == keys.numPadEnter then
@@ -151,8 +172,6 @@ function dialog.number(opts)
         else
           return math.min(value, opts.max or value)
         end
-      elseif a == keys.escape then
-        return nil
       elseif a == keys.up then
         text, fresh = tostring((evaluate(text) or 0) + 1), false
       elseif a == keys.down then
@@ -161,6 +180,7 @@ function dialog.number(opts)
     elseif event == "mouse_click" then
       for _, b in ipairs(buttons) do
         if clickY == b.y and clickX >= b.x1 and clickX <= b.x2 then
+          if b.cancel then return nil end
           return math.min(b.value, opts.max or b.value)
         end
       end
