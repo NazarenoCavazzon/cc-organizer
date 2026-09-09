@@ -15,6 +15,7 @@ local items = require("lib.items")
 local draw = require("lib.draw")
 local dialog = require("lib.dialog")
 local icons = require("lib.icons")
+local monitor = require("lib.monitor")
 
 local ui = {}
 
@@ -265,6 +266,15 @@ local function showDiagnostics()
     for _, p in ipairs(report.problems) do lines[#lines + 1] = "! " .. p end
   end
   lines[#lines + 1] = ""
+  local mon = monitor.status
+  lines[#lines + 1] = ("monitor: %s"):format(mon.state or "?")
+  if mon.name then
+    lines[#lines + 1] = ("  %s  %sx%s  %s")
+      :format(mon.name, mon.width or "?", mon.height or "?", mon.colour and "color" or "sin color")
+  end
+  if mon.error then lines[#lines + 1] = "  " .. mon.error end
+  if mon.frames then lines[#lines + 1] = ("  %d refrescos"):format(mon.frames) end
+  lines[#lines + 1] = ""
   lines[#lines + 1] = ("entrada: %s"):format(cfg.input)
   lines[#lines + 1] = ("salida:  %s"):format(cfg.output)
   lines[#lines + 1] = ("cofres de almacenamiento: %d"):format(#report.chests)
@@ -452,7 +462,7 @@ function ui.run(store, config)
   screen = draw.new(win, function()
     win.setVisible(true)
     win.setVisible(false)
-  end)
+  end, colour)
   dialog.attach(screen)
 
   running, ui.reconfigure = true, false

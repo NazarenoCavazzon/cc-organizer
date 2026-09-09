@@ -127,6 +127,12 @@ function mock.reset(spec)
       return out
     end,
     wrap = function(name) return registry[name] end,
+    getName = function(object)
+      for name, peripheral_ in pairs(registry) do
+        if peripheral_ == object then return name end
+      end
+      return nil
+    end,
     isPresent = function(name) return registry[name] ~= nil end,
     getType = function(name)
       if not registry[name] then return nil end

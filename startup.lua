@@ -92,7 +92,7 @@ repeat
     function() ui.run(storage, config) end,
     autoStore,
     watchNetwork,
-    function() monitor.run(storage) end
+    function() monitor.run(storage, ui.notify) end
   )
 
   -- F9 dentro de la TUI pide reconfigurar y volver a arrancar.

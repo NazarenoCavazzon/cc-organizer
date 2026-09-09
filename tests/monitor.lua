@@ -12,9 +12,19 @@ local eq, check, test = h.eq, h.check, h.test
 local IN, OUT = "minecraft:chest_in", "minecraft:chest_out"
 
 --- Monitor de mentira: guarda lo dibujado en una grilla propia.
-local function fakeMonitor(width, height)
+local function fakeMonitor(width, height, colour)
   local grid = {}
   local cx, cy = 1, 1
+  if colour == nil then colour = true end
+  -- Un monitor normal solo acepta blanco, negro y grises: cualquier otro color
+  -- tira "Colour not supported", igual que en el juego.
+  local function check(c)
+    if colour then return end
+    if c ~= colours.white and c ~= colours.black
+       and c ~= colours.grey and c ~= colours.lightGrey then
+      error("Colour not supported", 0)
+    end
+  end
   local function blank()
     for y = 1, height do
       grid[y] = {}
@@ -24,12 +34,12 @@ local function fakeMonitor(width, height)
   blank()
   return {
     getSize = function() return width, height end,
-    isColour = function() return true end,
+    isColour = function() return colour end,
     setTextScale = function() end,
     setCursorPos = function(x, y) cx, cy = math.floor(x), math.floor(y) end,
     setCursorBlink = function() end,
-    setTextColour = function() end,
-    setBackgroundColour = function() end,
+    setTextColour = check,
+    setBackgroundColour = check,
     clear = blank,
     write = function(s)
       if cy < 1 or cy > height then return end
@@ -67,6 +77,68 @@ local function setup(stock, width, height)
   local device = fakeMonitor(width or 50, height or 20)
   return storage, device, draw.new(device, function() end)
 end
+
+--- Monitor falso enchufado a la red, como en el juego.
+local function attachMonitor(width, height)
+  local device = fakeMonitor(width or 50, height or 20)
+  device.setBackgroundColor = device.setBackgroundColour
+  device.setTextColor = device.setTextColour
+  return mock.attach("monitor_0", "monitor", device)
+end
+
+test("monitor.run dibuja apenas encuentra el monitor", function()
+  local storage = setup({ ["minecraft:cobblestone"] = 300 })
+  local device = attachMonitor()
+
+  -- run() es un bucle infinito: se corta solo cuando la cola de eventos se
+  -- vacia, o sea despues del primer dibujo.
+  local ok, err = pcall(monitor.run, storage)
+  check(not ok, "termino por quedarse sin eventos, no por otra cosa: " .. tostring(err))
+  check(tostring(err):find("cola de eventos", 1, true) ~= nil, "el motivo es la cola: " .. tostring(err))
+
+  local text = device.text()
+  check(text:find("cc-organizer", 1, true) ~= nil, "dibujo el titulo en el monitor")
+  check(text:find("Cobblestone", 1, true) ~= nil, "y el stock")
+end)
+
+test("monitor.run avisa si el monitor falla en vez de callarselo", function()
+  local storage = setup({ ["minecraft:cobblestone"] = 300 })
+  local device = attachMonitor()
+  device.setTextScale = function() error("Terminal is not attached", 0) end
+
+  local avisos = {}
+  pcall(monitor.run, storage, function(msg) avisos[#avisos + 1] = msg end)
+  eq(#avisos > 0, true, "aviso del problema")
+  check(tostring(avisos[1]):find("Terminal is not attached", 1, true) ~= nil,
+    "con el error real: " .. tostring(avisos[1]))
+end)
+
+test("dibuja en un monitor normal, sin colores", function()
+  local storage = setup({ ["minecraft:cobblestone"] = 300 })
+  local device = fakeMonitor(50, 20, false)   -- monitor de piedra
+  device.setTextColor, device.setBackgroundColor = device.setTextColour, device.setBackgroundColour
+  mock.attach("monitor_0", "monitor", device)
+
+  local avisos = {}
+  pcall(monitor.run, storage, function(msg) avisos[#avisos + 1] = msg end)
+  eq(#avisos, 0, "sin errores: " .. tostring(avisos[1]))
+
+  local text = device.text()
+  check(text:find("cc-organizer", 1, true) ~= nil, "igual dibuja el titulo")
+  check(text:find("Cobblestone", 1, true) ~= nil, "y el stock")
+end)
+
+test("el diagnostico cuenta que esta pasando con el monitor", function()
+  local storage = setup({ ["minecraft:cobblestone"] = 300 })
+  eq(monitor.attach(), nil, "sin monitor conectado no hay canvas")
+  eq(monitor.status.state, "no encuentro ningun monitor", "y el estado lo dice")
+
+  attachMonitor(50, 20)
+  pcall(monitor.run, storage)
+  eq(monitor.status.state, "dibujando", "con monitor, dibujando")
+  eq(monitor.status.name, "monitor_0", "con el nombre de la red")
+  eq(monitor.status.width, 50, "y el tamano")
+end)
 
 test("el panel muestra el stock y la ocupacion", function()
   local storage, device, screen = setup({

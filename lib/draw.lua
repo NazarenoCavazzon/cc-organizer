@@ -10,10 +10,18 @@ local Canvas = {}
 Canvas.__index = Canvas
 
 --- `present` se llama para volcar el buffer a la pantalla de una sola vez.
-function draw.new(target, present)
+---
+--- `isColour` se pasa aparte a proposito: cuando el destino es una window, hay
+--- que preguntarle al dispositivo de abajo (monitor o terminal). Pintar un
+--- color que el dispositivo no soporta tira "Colour not supported" y deja la
+--- pantalla en blanco.
+function draw.new(target, present, isColour)
+  if isColour == nil then
+    isColour = (target.isColour and target.isColour()) or false
+  end
   return setmetatable({
     win = target,
-    colour = (target.isColour and target.isColour()) or false,
+    colour = isColour and true or false,
     flush = present or function() end,
   }, Canvas)
 end

@@ -127,8 +127,21 @@ function mt.reset(opts)
   _G.term.current = function() return _G.term end
   _G.term.redirect = function() end
   _G.window = {
-    -- La ventana falsa escribe en la misma grilla: alcanza para los tests.
-    create = function() return newSurface() end,
+    create = function(parent)
+      -- Sobre la terminal alcanza con otra superficie de la misma grilla; sobre
+      -- otro destino (un monitor) hay que escribir ahi, o el test no probaria
+      -- nada de lo que ve el jugador.
+      if parent and parent ~= _G.term then
+        local win = {}
+        for name, fn in pairs(parent) do win[name] = fn end
+        win.setVisible = function() end
+        win.redraw = function() end
+        win.restoreCursor = function() end
+        win.reposition = function() end
+        return win
+      end
+      return newSurface()
+    end,
   }
 
   _G.write = function(s) _G.term.write(s) end
@@ -143,6 +156,11 @@ function mt.reset(opts)
     end
   end
   os.queueEvent = function(...) mt.event(...) end
+  local timerId = 0
+  os.startTimer = function()
+    timerId = timerId + 1
+    return timerId
+  end
   os.sleep = function() end
 
   _G.read = function(_, _, _, default)
