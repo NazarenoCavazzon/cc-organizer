@@ -7,6 +7,7 @@ package.path = ("/%s/?.lua;/%s/?/init.lua;"):format(dir, dir) .. package.path
 local config = require("config")
 local storage = require("lib.storage")
 local setup = require("lib.setup")
+local monitor = require("lib.monitor")
 local ui = require("lib.ui")
 
 --- Vacia el cofre de entrada cada tanto sin pisar un comando en curso.
@@ -90,7 +91,8 @@ repeat
   parallel.waitForAny(
     function() ui.run(storage, config) end,
     autoStore,
-    watchNetwork
+    watchNetwork,
+    function() monitor.run(storage) end
   )
 
   -- F9 dentro de la TUI pide reconfigurar y volver a arrancar.

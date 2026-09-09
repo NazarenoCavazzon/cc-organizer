@@ -53,6 +53,9 @@ por vos. Se puede volver a abrir con **F9**.
 | click | seleccionar; click de nuevo pide (solo Advanced Computer) |
 | click derecho | pedir todo el stock de ese item (idem) |
 | a (en el dialogo) | poner todo el stock como cantidad |
+| flechas izq/der | cambiar de categoria (todo, recientes, bloques, materiales, herramientas, comida, plantas) |
+| `#logs` `#ores` | filtrar por tag del juego, no por nombre |
+| F4 | repetir el ultimo pedido, con la misma cantidad |
 | ctrl+u | limpiar la busqueda |
 | F1 | ayuda |
 | F2 | ordenar por cantidad / alfabetico (o click en `[cant]`) |
@@ -74,6 +77,27 @@ flechas suben y bajan de a uno.
 El cofre de entrada se vacia solo cada 3 segundos (`autoStoreInterval` en `config.lua`)
 y la pantalla avisa cuanto guardo. Si rompes o agregas un cofre, el indice se actualiza
 solo.
+
+## Panel en un monitor
+
+Si hay un monitor en la red (o pegado a la computadora) se dibuja solo un panel
+de solo lectura con el stock, una barra de ocupacion y los cofres. Se actualiza
+cuando algo cambia y cada 5 segundos, y se acomoda al tamano del monitor: usa
+tantas columnas como entren. No hay que configurar nada; si conectas el monitor
+con el programa andando, lo detecta.
+
+## Categorias, tags y recientes
+
+La lista se filtra de tres formas, combinables:
+
+- **texto**: `cobble`, busca en el nombre visible y en el id
+- **tag del juego**: `#logs`, `#ores`, `#ingots` — sale de `getItemDetail`, asi que
+  funciona con items de mods sin saber como se llaman
+- **categoria** (flechas izquierda/derecha): bloques, materiales, herramientas,
+  comida, plantas, y **recientes**, que son los ultimos 20 items que pediste
+
+Los recientes se guardan en `recent.txt` y sobreviven al reboot. **F4** repite el
+ultimo pedido con la misma cantidad, para confirmar de nuevo.
 
 ## Los sprites
 
@@ -105,6 +129,7 @@ lib/ui.lua         TUI: lista, busqueda y eventos
 lib/dialog.lua     ventanas modales (cantidad, detalle, ayuda)
 lib/draw.lua       helpers de dibujo sobre el buffer
 lib/icons.lua      sprites procedurales de 16x12
+lib/monitor.lua    panel de solo lectura en un monitor
 lib/setup.lua      asistente de configuracion
 install.lua        instalador via wget
 ```

@@ -1,33 +1,21 @@
--- Helpers de dibujo sobre un buffer de window: colores con degradado a
--- blanco/negro en computadoras normales, y presentacion atomica del cuadro.
+-- Canvas de dibujo sobre un buffer de window.
+--
+-- Es una instancia y no un singleton porque hay dos vistas a la vez: la
+-- terminal de la computadora y el panel del monitor. Comparten codigo pero no
+-- pueden compartir el estado del cursor ni el destino.
 
 local draw = {}
 
-local win, colour, flush
+local Canvas = {}
+Canvas.__index = Canvas
 
-function draw.attach(target, isColour, present)
-  win, colour, flush = target, isColour, present
-end
-
-function draw.size()
-  return win.getSize()
-end
-
-function draw.present()
-  if flush then flush() end
-end
-
---- Las computadoras normales solo tienen blanco y negro: cualquier fondo que no
---- sea negro se dibuja invertido.
-function draw.paint(fg, bg)
-  if colour then
-    win.setTextColour(fg)
-    win.setBackgroundColour(bg)
-  else
-    local inverted = bg ~= colours.black
-    win.setTextColour(inverted and colours.black or colours.white)
-    win.setBackgroundColour(inverted and colours.white or colours.black)
-  end
+--- `present` se llama para volcar el buffer a la pantalla de una sola vez.
+function draw.new(target, present)
+  return setmetatable({
+    win = target,
+    colour = (target.isColour and target.isColour()) or false,
+    flush = present or function() end,
+  }, Canvas)
 end
 
 function draw.fit(s, w)
@@ -36,32 +24,53 @@ function draw.fit(s, w)
   return s .. string.rep(" ", w - #s)
 end
 
-function draw.at(x, y, text)
-  win.setCursorPos(x, y)
-  win.write(text)
+function Canvas:size()
+  return self.win.getSize()
 end
 
---- Escribe alineado a la derecha terminando en la columna `right`.
-function draw.right(right, y, text)
-  win.setCursorPos(math.max(1, right - #text + 1), y)
-  win.write(text)
+function Canvas:present()
+  self.flush()
 end
 
-function draw.fill(x, y, w, h, bg)
-  draw.paint(colours.white, bg)
-  for i = 0, h - 1 do
-    draw.at(x, y + i, string.rep(" ", w))
+--- Las computadoras y monitores normales solo tienen blanco y negro: cualquier
+--- fondo que no sea negro se dibuja invertido.
+function Canvas:paint(fg, bg)
+  if self.colour then
+    self.win.setTextColour(fg)
+    self.win.setBackgroundColour(bg)
+  else
+    local inverted = bg ~= colours.black
+    self.win.setTextColour(inverted and colours.black or colours.white)
+    self.win.setBackgroundColour(inverted and colours.white or colours.black)
   end
 end
 
-function draw.clear()
-  draw.paint(colours.white, colours.black)
-  win.clear()
+function Canvas:at(x, y, text)
+  self.win.setCursorPos(x, y)
+  self.win.write(text)
 end
 
-function draw.cursor(x, y, visible)
-  win.setCursorPos(x, y)
-  win.setCursorBlink(visible)
+--- Escribe alineado a la derecha terminando en la columna `right`.
+function Canvas:right(right, y, text)
+  self.win.setCursorPos(math.max(1, right - #text + 1), y)
+  self.win.write(text)
+end
+
+function Canvas:fill(x, y, w, h, bg)
+  self:paint(colours.white, bg)
+  for i = 0, h - 1 do
+    self:at(x, y + i, string.rep(" ", w))
+  end
+end
+
+function Canvas:clear()
+  self:paint(colours.white, colours.black)
+  self.win.clear()
+end
+
+function Canvas:cursor(x, y, visible)
+  self.win.setCursorPos(x, y)
+  self.win.setCursorBlink(visible)
 end
 
 return draw

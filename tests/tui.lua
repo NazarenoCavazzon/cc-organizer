@@ -380,6 +380,79 @@ test("la tecla a pide todo el stock disponible", function()
   eq(mock.count(OUT, "minecraft:cobblestone"), 150, "entrego todo")
 end)
 
+test("las flechas cambian de categoria", function()
+  local storage, ui, cfg = setup({
+    ["minecraft:cobblestone"] = 300,   -- bloque
+    ["minecraft:iron_ingot"] = 64,     -- material
+    ["minecraft:diamond_pickaxe"] = 1, -- herramienta
+  })
+  mterm.key(mterm.KEYS.right)  -- recientes
+  mterm.key(mterm.KEYS.right)  -- bloques
+  mterm.key(mterm.KEYS.f10)
+  ui.run(storage, cfg)
+
+  local frame = mterm.lastFrame()
+  check(frame:find("<bloques>", 1, true) ~= nil, "muestra la categoria")
+  check(frame:find("Cobblestone", 1, true) ~= nil, "deja los bloques")
+  check(frame:find("Iron Ingot", 1, true) == nil, "y saca lo que no es bloque")
+end)
+
+test("la categoria recientes junta lo ultimo pedido", function()
+  local storage, ui, cfg = setup({
+    ["minecraft:cobblestone"] = 300,
+    ["minecraft:oak_log"] = 64,
+  })
+  mterm.type("oak")            -- selecciona Oak Log
+  mterm.key(mterm.KEYS.enter)
+  mterm.key(mterm.KEYS.enter)  -- confirma el stack sugerido
+  mterm.key(mterm.KEYS.leftCtrl)
+  mterm.key(mterm.KEYS.u)      -- limpia la busqueda
+  mterm.key(mterm.KEYS.right)  -- categoria recientes
+  mterm.key(mterm.KEYS.f10)
+  ui.run(storage, cfg)
+
+  local frame = mterm.lastFrame()
+  check(frame:find("<recientes>", 1, true) ~= nil, "esta en recientes")
+  check(frame:find("Oak Log", 1, true) ~= nil, "aparece lo pedido")
+  check(frame:find("Cobblestone", 1, true) == nil, "y nada mas")
+end)
+
+test("F4 repite el ultimo pedido", function()
+  local storage, ui, cfg = setup({ ["minecraft:cobblestone"] = 300 })
+  mterm.key(mterm.KEYS.enter)
+  mterm.type("10")
+  mterm.key(mterm.KEYS.enter)  -- pide 10
+  mterm.key(mterm.KEYS.f4)     -- repite: dialogo con 10 ya escrito
+  mterm.key(mterm.KEYS.enter)
+  mterm.key(mterm.KEYS.f10)
+  ui.run(storage, cfg)
+
+  eq(mock.count(OUT, "minecraft:cobblestone"), 20, "pidio 10 dos veces")
+end)
+
+test("F4 sin pedidos previos no rompe", function()
+  local storage, ui, cfg = setup({ ["minecraft:cobblestone"] = 300 })
+  mterm.key(mterm.KEYS.f4)
+  mterm.key(mterm.KEYS.f10)
+  ui.run(storage, cfg)
+
+  check(mterm.lastFrame():find("todavia no pediste nada", 1, true) ~= nil, "lo avisa")
+end)
+
+test("buscar por tag filtra la lista", function()
+  local storage, ui, cfg = setup({
+    ["minecraft:oak_log"] = 64,
+    ["minecraft:iron_ingot"] = 64,
+  })
+  mterm.type("#logs")
+  mterm.key(mterm.KEYS.f10)
+  ui.run(storage, cfg)
+
+  local frame = mterm.lastFrame()
+  check(frame:find("Oak Log", 1, true) ~= nil, "queda la madera")
+  check(frame:find("Iron Ingot", 1, true) == nil, "se va el lingote")
+end)
+
 test("F3 muestra el diagnostico del armado", function()
   local storage, ui, cfg = setup({ ["minecraft:cobblestone"] = 64 })
   mterm.key(mterm.KEYS.f3)

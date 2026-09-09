@@ -10,6 +10,16 @@ local MAXCOUNT = {
 
 local registry = {}
 local order = {}
+local types = {}
+
+-- Tags de mentira, con la forma que devuelve el juego: { ["minecraft:logs"] = true }
+local TAGS = {
+  ["minecraft:oak_log"] = { "minecraft:logs", "minecraft:oak_logs" },
+  ["minecraft:spruce_log"] = { "minecraft:logs" },
+  ["minecraft:iron_ingot"] = { "c:ingots", "c:ingots/iron" },
+  ["minecraft:gold_ingot"] = { "c:ingots" },
+  ["minecraft:cobblestone"] = { "minecraft:stone_crafting_materials" },
+}
 
 -- Un peripheral pegado a la computadora se llama por su lado y no existe para
 -- el resto de la red: pullItems contra el falla, igual que en el juego.
@@ -67,8 +77,10 @@ local function newChest(name, size, network)
   function c.getItemDetail(slot)
     local it = c.__slots[slot]
     if not it then return nil end
+    local tags = {}
+    for _, tag in ipairs(TAGS[it.name] or {}) do tags[tag] = true end
     return {
-      name = it.name, nbt = it.nbt, count = it.count,
+      name = it.name, nbt = it.nbt, count = it.count, tags = tags,
       displayName = displayName(it.name), maxCount = maxCount(it.name),
     }
   end
@@ -101,9 +113,10 @@ end
 
 --- Arranca un mundo nuevo. `spec` es una lista de {name=, size=}.
 function mock.reset(spec)
-  registry, order = {}, {}
+  registry, order, types = {}, {}, {}
   for _, s in ipairs(spec) do
     registry[s.name] = newChest(s.name, s.size, s.network)
+    types[s.name] = "inventory"
     order[#order + 1] = s.name
   end
 
@@ -115,8 +128,17 @@ function mock.reset(spec)
     end,
     wrap = function(name) return registry[name] end,
     isPresent = function(name) return registry[name] ~= nil end,
-    getType = function(name) return registry[name] and "minecraft:chest" or nil end,
-    hasType = function(name, t) return registry[name] ~= nil and t == "inventory" end,
+    getType = function(name)
+      if not registry[name] then return nil end
+      return types[name] == "monitor" and "monitor" or "minecraft:chest"
+    end,
+    hasType = function(name, t) return types[name] == t end,
+    find = function(t)
+      for _, name in ipairs(order) do
+        if types[name] == t then return registry[name] end
+      end
+      return nil
+    end,
   }
 
   -- En el mock nada cede el control, asi que correr en serie equivale a paralelo.
@@ -125,6 +147,14 @@ function mock.reset(spec)
       for _, fn in ipairs({ ... }) do fn() end
     end,
   }
+end
+
+--- Conecta un peripheral que no es un cofre (por ejemplo un monitor).
+function mock.attach(name, kind, object)
+  registry[name] = object
+  types[name] = kind
+  order[#order + 1] = name
+  return object
 end
 
 --- Pone items en un cofre directamente (sin pasar por el sistema).

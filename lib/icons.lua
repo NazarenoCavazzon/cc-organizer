@@ -225,6 +225,20 @@ local function matchFirst(list, name)
   return nil
 end
 
+-- Categorias para navegar la lista, agrupando las formas.
+local CATEGORIES = {
+  block = "bloques", ingot = "materiales", gem = "materiales", dust = "materiales",
+  rod = "materiales", liquid = "materiales", tool = "herramientas",
+  food = "comida", plant = "plantas",
+}
+
+icons.CATEGORIES = { "bloques", "materiales", "herramientas", "comida", "plantas" }
+
+--- Categoria de un item, para el filtro por categoria de la lista.
+function icons.category(key)
+  return CATEGORIES[icons.describe(key).kind] or "bloques"
+end
+
 --- Que forma y color le toca a un item. Separado del dibujo para testearlo.
 function icons.describe(key)
   local name = shortName(key)

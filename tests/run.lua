@@ -288,7 +288,23 @@ test("el diagnostico distingue lleno de verdad", function()
   check(problems:find("llenos de verdad", 1, true) ~= nil, "avisa que si esta lleno: " .. problems)
 end)
 
+test("filtra por tag del juego con #", function()
+  local storage = setup({ { name = "minecraft:chest_0", size = 27 } })
+  mock.give(IN, "minecraft:oak_log", 64)
+  mock.give(IN, "minecraft:spruce_log", 64)
+  mock.give(IN, "minecraft:iron_ingot", 64)
+  mock.give(IN, "minecraft:cobblestone", 64)
+  storage.store()
+
+  eq(#storage.stock("#logs"), 2, "las dos maderas")
+  eq(#storage.stock("#ingots"), 1, "el lingote, aunque el tag sea de otro namespace")
+  eq(#storage.stock("#oak_logs"), 1, "tag mas especifico")
+  eq(#storage.stock("#nada"), 0, "tag que no existe")
+  eq(#storage.stock("log"), 2, "sin # sigue siendo busqueda por nombre")
+end)
+
 require("tests.icons")
+require("tests.monitor")
 require("tests.tui")
 
 os.exit(h.summary() and 0 or 1)  -- 5.1 acepta el booleano como codigo 0/1

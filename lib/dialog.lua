@@ -5,6 +5,13 @@ local draw = require("lib.draw")
 
 local dialog = {}
 
+-- Canvas activo, puesto por la UI al arrancar.
+local screen
+
+function dialog.attach(canvas)
+  screen = canvas
+end
+
 local CHARS = "0123456789+-*/() "
 
 --- Acepta expresiones tipo "64*3+16" (idea prestada de artist).
@@ -29,21 +36,21 @@ dialog.evaluate = evaluate
 
 --- Dibuja el marco y devuelve el rectangulo interior.
 local function frame(title, width, height)
-  local W, H = draw.size()
+  local W, H = screen:size()
   width = math.min(width, W - 2)
   height = math.min(height, H - 2)
   local x = math.floor((W - width) / 2) + 1
   local y = math.floor((H - height) / 2) + 1
 
-  draw.paint(colours.black, colours.cyan)
-  draw.at(x, y, draw.fit(" " .. title, width))
-  draw.fill(x, y + 1, width, height - 1, colours.grey)
+  screen:paint(colours.black, colours.cyan)
+  screen:at(x, y, draw.fit(" " .. title, width))
+  screen:fill(x, y + 1, width, height - 1, colours.grey)
   return x, y, width, height
 end
 
 local function line(x, y, width, text, fg)
-  draw.paint(fg or colours.white, colours.grey)
-  draw.at(x, y, draw.fit(" " .. text, width))
+  screen:paint(fg or colours.white, colours.grey)
+  screen:at(x, y, draw.fit(" " .. text, width))
 end
 
 --- En CC el Escape cierra la GUI de la computadora y el programa nunca lo ve,
@@ -55,7 +62,7 @@ end
 
 --- Caja informativa: se cierra con cualquier tecla o click.
 function dialog.message(title, lines)
-  local W, H = draw.size()
+  local W, H = screen:size()
   local maxLines = H - 6
   if #lines > maxLines then
     local cut = {}
@@ -73,8 +80,8 @@ function dialog.message(title, lines)
     line(x, y + 1 + i, w, text, text:sub(1, 1) == "!" and colours.yellow or colours.white)
   end
   line(x, y + #lines + 3, w, "tecla para cerrar", colours.lightGrey)
-  draw.cursor(1, 1, false)
-  draw.present()
+  screen:cursor(1, 1, false)
+  screen:present()
 
   while true do
     local event = os.pullEvent()
@@ -85,7 +92,7 @@ end
 --- Detalle de un item: el sprite a la izquierda y los datos al costado.
 --- `icon` son filas de celdas { char, fg, bg }, como las devuelve lib/icons.
 function dialog.detail(title, icon, lines)
-  local W, H = draw.size()
+  local W, H = screen:size()
   local iconW = icon[1] and #icon[1] or 0
   local iconH = #icon
   local gutter = iconW > 0 and iconW + 2 or 0
@@ -105,19 +112,19 @@ function dialog.detail(title, icon, lines)
   local x, y, w = frame(title, width, height)
   for r, cells in ipairs(icon) do
     for c, cell in ipairs(cells) do
-      draw.paint(cell[2], cell[3])
-      draw.at(x + c, y + 1 + r, cell[1])
+      screen:paint(cell[2], cell[3])
+      screen:at(x + c, y + 1 + r, cell[1])
     end
   end
   for i, text in ipairs(lines) do
     local left = i <= iconH and gutter or 0
-    draw.paint(colours.white, colours.grey)
-    draw.at(x + 1 + left, y + 1 + i, draw.fit(text, w - 2 - left))
+    screen:paint(colours.white, colours.grey)
+    screen:at(x + 1 + left, y + 1 + i, draw.fit(text, w - 2 - left))
   end
-  draw.paint(colours.lightGrey, colours.grey)
-  draw.at(x + 1, y + height - 1, draw.fit("tecla para cerrar", w - 2))
-  draw.cursor(1, 1, false)
-  draw.present()
+  screen:paint(colours.lightGrey, colours.grey)
+  screen:at(x + 1, y + height - 1, draw.fit("tecla para cerrar", w - 2))
+  screen:cursor(1, 1, false)
+  screen:present()
 
   while true do
     local event = os.pullEvent()
@@ -154,21 +161,21 @@ function dialog.number(opts)
     end
 
     line(x, row, w, "", colours.white)
-    draw.paint(colours.yellow, colours.grey)
-    draw.at(x + 1, row, "cantidad: ")
-    draw.paint(colours.white, colours.black)
-    draw.at(x + 11, row, draw.fit(text .. "_", w - 12))
+    screen:paint(colours.yellow, colours.grey)
+    screen:at(x + 1, row, "cantidad: ")
+    screen:paint(colours.white, colours.black)
+    screen:at(x + 11, row, draw.fit(text .. "_", w - 12))
     row = row + 1
 
     -- Los presets solo llenan el campo: mandar los items necesita confirmar.
     local buttons, bx = {}, x + 1
-    draw.paint(colours.white, colours.grey)
-    draw.at(x + 1, row, string.rep(" ", w - 2))
+    screen:paint(colours.white, colours.grey)
+    screen:at(x + 1, row, string.rep(" ", w - 2))
     for _, preset in ipairs(presets) do
       local label = " " .. preset.label .. " "
       if bx + #label <= x + w - 1 then
-        draw.paint(colours.black, colours.lightGrey)
-        draw.at(bx, row, label)
+        screen:paint(colours.black, colours.lightGrey)
+        screen:at(bx, row, label)
         buttons[#buttons + 1] = { x1 = bx, x2 = bx + #label - 1, y = row, fill = preset.value }
         bx = bx + #label + 1
       end
@@ -179,13 +186,13 @@ function dialog.number(opts)
     local confirm, cancel = " pedir ", " cancelar "
     local cancelX = x + w - 1 - #cancel
     local confirmX = cancelX - 1 - #confirm
-    draw.paint(colours.white, colours.grey)
-    draw.at(x + 1, row, string.rep(" ", w - 2))
-    draw.paint(colours.black, colours.lime)
-    draw.at(confirmX, row, confirm)
+    screen:paint(colours.white, colours.grey)
+    screen:at(x + 1, row, string.rep(" ", w - 2))
+    screen:paint(colours.black, colours.lime)
+    screen:at(confirmX, row, confirm)
     buttons[#buttons + 1] = { x1 = confirmX, x2 = confirmX + #confirm - 1, y = row, confirm = true }
-    draw.paint(colours.white, colours.red)
-    draw.at(cancelX, row, cancel)
+    screen:paint(colours.white, colours.red)
+    screen:at(cancelX, row, cancel)
     buttons[#buttons + 1] = { x1 = cancelX, x2 = cancelX + #cancel - 1, y = row, cancel = true }
     row = row + 1
 
@@ -195,8 +202,8 @@ function dialog.number(opts)
       line(x, row, w, "enter pedir  a = todo  ctrl+d cancela", colours.lightGrey)
     end
 
-    draw.cursor(1, 1, false)
-    draw.present()
+    screen:cursor(1, 1, false)
+    screen:present()
 
     local event, param, clickX, clickY = os.pullEvent()
     error_ = nil

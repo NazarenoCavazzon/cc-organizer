@@ -20,10 +20,24 @@ end
 
 function items.setMeta(key, detail)
   if not detail then return end
+  -- getItemDetail trae los tags del juego ("minecraft:logs", "c:ingots"...);
+  -- los guardamos como lista para poder filtrar con #logs.
+  local tags = {}
+  if type(detail.tags) == "table" then
+    for tag in pairs(detail.tags) do tags[#tags + 1] = tag end
+    table.sort(tags)
+  end
   meta[key] = {
     displayName = detail.displayName or detail.name,
     maxCount = detail.maxCount or 64,
+    tags = tags,
   }
+end
+
+--- Tags del item, o lista vacia si todavia no tenemos metadata.
+function items.tags(key)
+  local m = meta[key]
+  return m and m.tags or {}
 end
 
 function items.hasMeta(key)
@@ -49,12 +63,28 @@ function items.shortName(key)
   return name:match("[^:]+$") or name
 end
 
+--- Filtro que empieza con # busca en los tags del juego: #logs, #ores, #planks.
+local function matchesTag(key, filter)
+  for _, tag in ipairs(items.tags(key)) do
+    -- El namespace del tag tampoco cuenta: #logs matchea "minecraft:logs".
+    local short = tag:match("[^:]+$") or tag
+    if short:lower():find(filter, 1, true) or tag:lower():find(filter, 1, true) then
+      return true
+    end
+  end
+  return false
+end
+
 --- true si el texto aparece en el id o en el nombre visible.
 --- El namespace se ignora salvo que lo escribas: si no, buscar "in" o "raf"
 --- matchearia "minecraft:" y por lo tanto todo el inventario.
 function items.matches(key, filter)
   if filter == nil or filter == "" then return true end
   filter = filter:lower()
+  if filter:sub(1, 1) == "#" then
+    local tag = filter:sub(2)
+    return tag == "" or matchesTag(key, tag)
+  end
   local id = filter:find(":", 1, true) and key or (key:match("^.-:(.*)$") or key)
   if id:lower():find(filter, 1, true) then return true end
   local m = meta[key]

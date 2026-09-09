@@ -15,6 +15,7 @@ local FILES = {
   "lib/dialog.lua",
   "lib/icons.lua",
   "lib/items.lua",
+  "lib/monitor.lua",
   "lib/setup.lua",
   "lib/storage.lua",
   "lib/ui.lua",

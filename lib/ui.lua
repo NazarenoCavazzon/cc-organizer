@@ -19,19 +19,69 @@ local icons = require("lib.icons")
 local ui = {}
 
 local storage, cfg
-local win, W, H
+local win, screen, W, H
 local colour = false
 local query = ""
 local rows = {}
 local sel, top = 1, 1
 local sortByName = false
+local category = 1
+local recent = {}
+local lastOrder = nil
 local message, messageColour
 local ctrlDown = false
 local dirty, running = true, true
 local sortButton = { x1 = 0, x2 = -1 }
+local catButton = { x1 = 0, x2 = -1 }
+
+local requestFor  -- se define abajo, la usa repeatLast
 
 -- Los avisos del guardado automatico llegan desde otra corrutina.
 local pending = {}
+
+-- "todo" y "recientes" son especiales; el resto sale de lib/icons.
+local CATEGORIES = { "todo", "recientes" }
+for _, name in ipairs(icons.CATEGORIES) do CATEGORIES[#CATEGORIES + 1] = name end
+
+local RECENT_FILE = "recent.txt"
+local RECENT_MAX = 20
+
+--- Los recientes sobreviven al reboot: es lo que mas se pide.
+local function loadRecent()
+  recent = {}
+  if not fs or not fs.exists(RECENT_FILE) then return end
+  local file = fs.open(RECENT_FILE, "r")
+  if not file then return end
+  local line = file.readLine()
+  while line do
+    if line ~= "" then recent[#recent + 1] = line end
+    line = file.readLine()
+  end
+  file.close()
+end
+
+local function saveRecent()
+  if not fs then return end
+  local file = fs.open(RECENT_FILE, "w")
+  if not file then return end
+  for _, key in ipairs(recent) do file.writeLine(key) end
+  file.close()
+end
+
+local function remember(key)
+  for i, previous in ipairs(recent) do
+    if previous == key then table.remove(recent, i) break end
+  end
+  table.insert(recent, 1, key)
+  while #recent > RECENT_MAX do table.remove(recent) end
+  saveRecent()
+end
+
+local function recentRank()
+  local rank = {}
+  for i, key in ipairs(recent) do rank[key] = i end
+  return rank
+end
 
 local function listHeight()
   return math.max(1, H - 4)
@@ -64,7 +114,21 @@ end
 local function recompute(keepSelection)
   local previous = keepSelection and rows[sel] and rows[sel].key
   rows = storage.stock(query ~= "" and query or nil)
-  if sortByName then
+
+  local cat = CATEGORIES[category]
+  local rank = recentRank()
+  if cat ~= "todo" then
+    local kept = {}
+    for _, entry in ipairs(rows) do
+      local ok = cat == "recientes" and rank[entry.key] ~= nil or icons.category(entry.key) == cat
+      if ok then kept[#kept + 1] = entry end
+    end
+    rows = kept
+  end
+
+  if cat == "recientes" then
+    table.sort(rows, function(a, b) return rank[a.key] < rank[b.key] end)
+  elseif sortByName then
     table.sort(rows, function(a, b) return a.display:lower() < b.display:lower() end)
   end
   sel = 1
@@ -82,23 +146,30 @@ local function drawHeader()
   local total = #storage.stock()
   local tipos = query ~= "" and ("%d/%d tipos"):format(#rows, total) or ("%d tipos"):format(total)
   local right = ("%s   %d/%d slots"):format(tipos, s.used, s.slots)
-  draw.paint(colours.black, colours.cyan)
-  draw.at(1, 1, draw.fit(" cc-organizer", W))
-  draw.right(W - 1, 1, right)
+  screen:paint(colours.black, colours.cyan)
+  screen:at(1, 1, draw.fit(" cc-organizer", W))
+  screen:right(W - 1, 1, right)
 end
 
 local function drawSearch()
-  draw.paint(colours.white, colours.black)
-  draw.at(1, 2, string.rep(" ", W))
-  draw.paint(colours.lightGrey, colours.black)
-  draw.at(1, 2, "buscar: ")
-  draw.paint(colours.white, colours.black)
-  draw.at(9, 2, query .. "_")
+  screen:paint(colours.white, colours.black)
+  screen:at(1, 2, string.rep(" ", W))
+  screen:paint(colours.lightGrey, colours.black)
+  screen:at(1, 2, "buscar: ")
+  screen:paint(colours.white, colours.black)
+  screen:at(9, 2, query .. "_")
 
   local label = sortByName and "[A-Z]" or "[cant]"
   sortButton.x1, sortButton.x2 = W - #label, W - 1
-  draw.paint(colours.black, colour and colours.lightGrey or colours.white)
-  draw.at(sortButton.x1, 2, label)
+  screen:paint(colours.black, colour and colours.lightGrey or colours.white)
+  screen:at(sortButton.x1, 2, label)
+
+  -- Categoria, con flechas clickeables.
+  local chip = "<" .. CATEGORIES[category] .. ">"
+  catButton.x1 = sortButton.x1 - #chip - 1
+  catButton.x2 = catButton.x1 + #chip - 1
+  screen:paint(colours.black, colour and colours.cyan or colours.white)
+  screen:at(catButton.x1, 2, chip)
 end
 
 local function drawList()
@@ -116,35 +187,35 @@ local function drawList()
     local bg = selected and (colour and colours.cyan or colours.white) or colours.black
     local fg = selected and colours.black or colours.white
 
-    draw.paint(fg, bg)
-    draw.at(1, y, string.rep(" ", W - 1))
+    screen:paint(fg, bg)
+    screen:at(1, y, string.rep(" ", W - 1))
     if entry then
-      draw.paint(selected and colours.black or colours.yellow, bg)
-      draw.right(7, y, shortCount(entry.total))
-      draw.paint(fg, bg)
-      draw.at(9, y, draw.fit(entry.display, W - 10))
+      screen:paint(selected and colours.black or colours.yellow, bg)
+      screen:right(7, y, shortCount(entry.total))
+      screen:paint(fg, bg)
+      screen:at(9, y, draw.fit(entry.display, W - 10))
     end
 
     -- Barra de scroll.
     local track = colour and colours.grey or colours.black
     local thumb = colour and colours.lightGrey or colours.white
     local isThumb = thumbFrom and i >= thumbFrom and i < thumbFrom + thumbSize
-    draw.paint(colours.white, thumbFrom and (isThumb and thumb or track) or colours.black)
-    draw.at(W, y, " ")
+    screen:paint(colours.white, thumbFrom and (isThumb and thumb or track) or colours.black)
+    screen:at(W, y, " ")
   end
 
   if #rows == 0 then
     local text = query ~= "" and ("sin resultados para '" .. query .. "'") or "el almacenamiento esta vacio"
-    draw.paint(colours.grey, colours.black)
-    draw.at(math.max(1, math.floor((W - #text) / 2)), 3 + math.floor(h / 2), text)
+    screen:paint(colours.grey, colours.black)
+    screen:at(math.max(1, math.floor((W - #text) / 2)), 3 + math.floor(h / 2), text)
   end
 end
 
 local function drawFooter()
-  draw.paint(messageColour or colours.lightGrey, colours.black)
-  draw.at(1, H - 1, draw.fit(message or "", W))
-  draw.paint(colours.black, colour and colours.grey or colours.white)
-  draw.at(1, H, draw.fit(" enter pedir   tab detalle   F1 ayuda   F10 salir", W))
+  screen:paint(messageColour or colours.lightGrey, colours.black)
+  screen:at(1, H - 1, draw.fit(message or "", W))
+  screen:paint(colours.black, colour and colours.grey or colours.white)
+  screen:at(1, H, draw.fit(" enter pedir   tab detalle   F1 ayuda   F10 salir", W))
 end
 
 local function render()
@@ -152,14 +223,16 @@ local function render()
   drawSearch()
   drawList()
   drawFooter()
-  draw.cursor(1, 1, false)
-  draw.present()
+  screen:cursor(1, 1, false)
+  screen:present()
   dirty = false
 end
 
 local function showHelp()
   dialog.message("atajos", {
     "escribir        filtra la lista",
+    "#logs #ores     filtra por tag del juego",
+    "flechas < >     cambia de categoria",
     "flechas         mover la seleccion",
     "rePag / avPag   pagina entera",
     "enter           pedir (cantidad libre)",
@@ -171,6 +244,7 @@ local function showHelp()
     "ctrl+u          limpiar la busqueda",
     "F2              orden: cantidad / A-Z",
     "F3              diagnostico del armado",
+    "F4              repetir el ultimo pedido",
     "F5              re-escanear la red",
     "F9              reconfigurar entrada/salida",
     "ctrl+d          cancelar un dialogo",
@@ -224,6 +298,11 @@ local function deliver(entry, amount)
   storage.busy = true
   local moved, reason = storage.take(entry.key, amount)
   storage.busy = false
+  if moved > 0 then
+    remember(entry.key)
+    lastOrder = { key = entry.key, display = entry.display, amount = amount }
+    os.queueEvent("organizer_update")  -- que el panel del monitor se entere
+  end
 
   if moved == 0 then
     setMessage(("no entregue nada: %s"):format(reason or "?"), colours.red)
@@ -235,16 +314,15 @@ local function deliver(entry, amount)
   recompute(true)
 end
 
-local function requestSelected()
-  local entry = rows[sel]
-  if not entry then return end
+--- Abre el dialogo de cantidad para un item concreto.
+function requestFor(entry, default)  -- luacheck: ignore
   local amount = dialog.number({
     title = entry.display,
     info = {
       ("hay %d en stock"):format(entry.total),
       "podes escribir cuentas: 64*3+16",
     },
-    default = math.min(entry.total, items.maxCount(entry.key)),
+    default = default or math.min(entry.total, items.maxCount(entry.key)),
     max = entry.total,
   })
   dirty = true
@@ -253,6 +331,31 @@ local function requestSelected()
     return
   end
   deliver(entry, amount)
+end
+
+local function requestSelected()
+  local entry = rows[sel]
+  if entry then requestFor(entry) end
+end
+
+--- Vuelve a pedir lo ultimo, con la misma cantidad ya escrita para confirmar.
+local function repeatLast()
+  if not lastOrder then
+    setMessage("todavia no pediste nada", colours.yellow)
+    return
+  end
+  local total = storage.count(lastOrder.key)
+  if total == 0 then
+    setMessage(("ya no queda %s"):format(lastOrder.display), colours.yellow)
+    return
+  end
+  requestFor({ key = lastOrder.key, display = lastOrder.display, total = total },
+             math.min(lastOrder.amount, total))
+end
+
+local function cycleCategory(delta)
+  category = (category - 1 + delta) % #CATEGORIES + 1
+  recompute(true)
 end
 
 local function move(delta)
@@ -293,6 +396,8 @@ local function onKey(key)
     running = false
   elseif key == keys.up then move(-1)
   elseif key == keys.down then move(1)
+  elseif key == keys.left then cycleCategory(-1)
+  elseif key == keys.right then cycleCategory(1)
   elseif key == keys.pageUp then move(-listHeight())
   elseif key == keys.pageDown then move(listHeight())
   elseif key == keys.home then sel = 1; clampView(); dirty = true
@@ -307,6 +412,7 @@ local function onKey(key)
   elseif key == keys.f1 then showHelp()
   elseif key == keys.f2 then sortByName = not sortByName; recompute(true)
   elseif key == keys.f3 then showDiagnostics()
+  elseif key == keys.f4 then repeatLast()
   elseif key == keys.f5 then doRefresh()
   elseif key == keys.f9 then ui.reconfigure = true; running = false
   elseif key == keys.f10 then running = false
@@ -317,6 +423,10 @@ local function onClick(button, x, y)
   if y == 2 and x >= sortButton.x1 and x <= sortButton.x2 then
     sortByName = not sortByName
     recompute(true)
+    return
+  end
+  if y == 2 and x >= catButton.x1 and x <= catButton.x2 then
+    cycleCategory(x == catButton.x1 and -1 or 1)
     return
   end
   local i = top + (y - 3)
@@ -339,16 +449,18 @@ function ui.run(store, config)
   W, H = term.getSize()
   colour = term.isColour and term.isColour()
   win = window.create(term.current(), 1, 1, W, H, false)
-  draw.attach(win, colour, function()
+  screen = draw.new(win, function()
     win.setVisible(true)
     win.setVisible(false)
   end)
+  dialog.attach(screen)
 
   running, ui.reconfigure = true, false
-  query, sel, top, ctrlDown = "", 1, 1, false
+  query, sel, top, ctrlDown, category = "", 1, 1, false, 1
+  loadRecent()
   term.setBackgroundColour(colours.black)
   term.clear()
-  draw.clear()
+  screen:clear()
 
   recompute()
   local s = storage.space()
