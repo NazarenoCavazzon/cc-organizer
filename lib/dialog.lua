@@ -12,8 +12,15 @@ local function evaluate(text)
   if text:match("^%s*$") then return nil end
   local plain = tonumber(text)
   if plain then return math.floor(plain) end
+  -- load con entorno vacio es lo que usa CC:Tweaked; loadstring es el de Lua 5.1
+  -- pelado. Probamos el primero y caemos al segundo.
   local ok, chunk = pcall(load, "return " .. text, "cantidad", "t", {})
-  if not ok or not chunk then return nil end
+  if not ok or not chunk then
+    if not loadstring then return nil end
+    ok, chunk = pcall(loadstring, "return " .. text)
+    if not ok or not chunk then return nil end
+    if setfenv then setfenv(chunk, {}) end
+  end
   local fine, value = pcall(chunk)
   if not fine or type(value) ~= "number" or value ~= value then return nil end
   return math.floor(value)

@@ -39,7 +39,7 @@ end
 --- Cantidad compacta para que entre en la columna.
 local function shortCount(n)
   if n < 100000 then return tostring(n) end
-  return ("%dk"):format(n // 1000)
+  return ("%dk"):format(math.floor(n / 1000))
 end
 
 local function setMessage(text, c)

@@ -3,6 +3,8 @@
 
 local mt = { frames = {} }
 
+local unpack = table.unpack or unpack
+
 local W, H = 51, 19
 local screen, cx, cy
 local queue, inputs
@@ -123,7 +125,7 @@ function mt.reset()
     while true do
       local event = table.remove(queue, 1)
       if not event then error("la cola de eventos se vacio (falta un F10?)", 0) end
-      if not filter or event[1] == filter then return table.unpack(event) end
+      if not filter or event[1] == filter then return unpack(event) end
     end
   end
   os.queueEvent = function(...) mt.event(...) end

@@ -88,8 +88,13 @@ install.lua        instalador via wget
 Sin Minecraft, con Lua local:
 
 ```sh
-lua tests/run.lua
+sh tests/check.sh
 ```
+
+Eso hace dos cosas. Primero parsea con **luajit** todos los archivos que van a la
+computadora: CC:Tweaked corre **Lua 5.1** y el Lua del sistema (5.4+) acepta
+sintaxis que en el juego explota, como `//`. Despues corre los tests con los dos
+interpretes, asi que tambien se validan las diferencias de runtime.
 
 `tests/mock_peripheral.lua` simula la red de cofres y `tests/mock_term.lua` una terminal
 de 51x19 con cola de eventos, asi que se testean tanto el reparto (stacks parciales,

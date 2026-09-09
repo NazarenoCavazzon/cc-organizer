@@ -3,6 +3,10 @@
 
 local items = require("lib.items")
 
+-- CC:Tweaked corre Lua 5.1 con table.unpack agregado; Lua 5.1 pelado solo tiene
+-- unpack. Aceptamos los dos para poder correr los tests con cualquiera.
+local unpack = table.unpack or unpack
+
 local storage = {}
 
 local cfg
@@ -35,7 +39,7 @@ local function eachParallel(list, fn)
       local v = list[j]
       batch[#batch + 1] = function() fn(v) end
     end
-    parallel.waitForAll(table.unpack(batch))
+    parallel.waitForAll(unpack(batch))
     i = i + BATCH
   end
 end

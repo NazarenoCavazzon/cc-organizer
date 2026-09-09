@@ -290,4 +290,4 @@ end)
 
 require("tests.tui")
 
-os.exit(h.summary() and 0 or 1)
+os.exit(h.summary() and 0 or 1)  -- 5.1 acepta el booleano como codigo 0/1
