@@ -9,6 +9,8 @@
 -- material, asi que cualquier item del juego o de un mod tiene icono sin
 -- necesidad de una tabla item por item.
 
+local pixels = require("lib.pixels")
+
 local icons = {}
 
 local WIDTH, HEIGHT = 16, 12
@@ -249,38 +251,16 @@ function icons.describe(key)
 end
 
 --- El sprite como filas de celdas { char, fg, bg }, listo para dibujar.
----
---- Los caracteres 128..159 encienden 5 de los 6 subpixeles y dejan el de abajo
---- a la derecha con el color de fondo. Cuando ese pixel tiene que estar
---- encendido se invierte el patron entero y se intercambian los colores.
 function icons.render(key, background)
   local info = icons.describe(key)
-  local fg = colours[info.colour] or colours.white
-  local bg = background or colours.black
-  local shape = SHAPES[info.kind] or SHAPES.block
+  return pixels.toCells(SHAPES[info.kind] or SHAPES.block,
+                        colours[info.colour] or colours.white,
+                        background or colours.black)
+end
 
-  local rows = {}
-  for cy = 0, HEIGHT / 3 - 1 do
-    local cells = {}
-    for cx = 0, WIDTH / 2 - 1 do
-      local mask, bit = 0, 1
-      for py = 1, 3 do
-        for px = 1, 2 do
-          local char = shape[cy * 3 + py]:sub(cx * 2 + px, cx * 2 + px)
-          if char ~= "." and char ~= " " then mask = mask + bit end
-          bit = bit * 2
-        end
-      end
-      local front, back = fg, bg
-      if mask >= 32 then
-        mask = 63 - mask
-        front, back = back, front
-      end
-      cells[cx + 1] = { string.char(128 + mask % 32), front, back }
-    end
-    rows[cy + 1] = cells
-  end
-  return rows
+--- Las filas de pixeles crudas, para tests y para dibujar en otro lado.
+function icons.shape(key)
+  return SHAPES[icons.describe(key).kind] or SHAPES.block
 end
 
 icons.WIDTH, icons.HEIGHT = WIDTH, HEIGHT

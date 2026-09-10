@@ -105,7 +105,7 @@ test("monitor.run dibuja apenas encuentra el monitor", function()
   check(tostring(err):find("cola de eventos", 1, true) ~= nil, "el motivo es la cola: " .. tostring(err))
 
   local text = device.text()
-  check(text:find("cc-organizer", 1, true) ~= nil, "dibujo el titulo en el monitor")
+  check(text:find("STOCK", 1, true) ~= nil, "dibujo el panel en el monitor")
   check(text:find("Cobblestone", 1, true) ~= nil, "y el stock")
 end)
 
@@ -132,7 +132,7 @@ test("dibuja en un monitor normal, sin colores", function()
   eq(#avisos, 0, "sin errores: " .. tostring(avisos[1]))
 
   local text = device.text()
-  check(text:find("cc-organizer", 1, true) ~= nil, "igual dibuja el titulo")
+  check(text:find("STOCK", 1, true) ~= nil, "igual dibuja el panel")
   check(text:find("Cobblestone", 1, true) ~= nil, "y el stock")
 end)
 
@@ -159,42 +159,81 @@ test("la barra de ocupacion se distingue en un monitor sin color", function()
 
     -- 6 de 54 slots: el principio de la barra esta lleno y el medio vacio.
     -- Comparar dos puntos dentro de la barra, no el resto de la linea.
-    local lleno, vacio = device.bgAt(3, 2), device.bgAt(20, 2)
+    -- La barra vive en la ultima fila del panel.
+    local lleno, vacio = device.bgAt(3, 20), device.bgAt(20, 20)
     check(lleno ~= vacio, ("con color=%s el lleno (%s) tiene que verse distinto del vacio (%s)")
       :format(tostring(colour), tostring(lleno), tostring(vacio)))
   end
 end)
 
-test("el panel muestra el stock y la ocupacion", function()
+test("el panel muestra el stock, la actividad y la ocupacion", function()
   local storage, device, screen = setup({
     ["minecraft:cobblestone"] = 300,
     ["minecraft:oak_log"] = 64,
   })
+  storage.take("minecraft:oak_log", 20)
   monitor.draw(screen, storage)
   local text = device.text()
 
-  check(text:find("cc-organizer", 1, true) ~= nil, "titulo")
+  check(text:find("STOCK", 1, true) ~= nil, "seccion de stock")
+  check(text:find("ACTIVIDAD", 1, true) ~= nil, "seccion de actividad")
   check(text:find("2 tipos", 1, true) ~= nil, "cuenta los tipos")
+  check(text:find("2 cofres", 1, true) ~= nil, "y los cofres")
   check(text:find("Cobblestone", 1, true) ~= nil, "lista los items")
   check(text:find("300", 1, true) ~= nil, "con la cantidad")
-  check(text:find("6/54 slots", 1, true) ~= nil, "ocupacion")
-  check(text:find("2 cofres", 1, true) ~= nil, "cofres en el pie")
+  check(text:find("-20", 1, true) ~= nil, "registra la entrega en actividad")
+  check(text:find("6/54", 1, true) ~= nil, "ocupacion")
+  check(text:find("bloques", 1, true) ~= nil, "resumen por categoria")
 end)
 
-test("usa mas de una columna si el monitor es ancho", function()
-  local stock = {}
-  for i = 1, 30 do stock["minecraft:item_" .. string.format("%02d", i)] = i * 10 end
-  local storage, device, screen = setup(stock, 50, 12)
+test("el titulo grande se dibuja con subpixeles", function()
+  local storage, device, screen = setup({ ["minecraft:cobblestone"] = 300 })
   monitor.draw(screen, storage)
-
-  local lines = {}
-  for line in device.text():gmatch("[^\n]+") do lines[#lines + 1] = line end
-  -- Con 50 de ancho entran 2 columnas de 22: tiene que haber items pasada la 24.
-  local wide = false
-  for _, line in ipairs(lines) do
-    if #line:gsub("%s+$", "") > 24 and line:find("Item", 1, true) then wide = true end
+  -- Las dos primeras filas son el titulo: tienen que ser caracteres de bloque.
+  local text = device.text()
+  local firstLine = text:match("[^\n]+") or ""
+  local blocks = 0
+  for i = 1, #firstLine do
+    local byte = firstLine:byte(i)
+    if byte >= 128 and byte <= 159 then blocks = blocks + 1 end
   end
-  check(wide, "hay una segunda columna de items")
+  check(blocks > 10, "hay pixeles de titulo en la primera fila: " .. blocks)
+end)
+
+test("rota paginas cuando no entra todo el stock", function()
+  local stock = {}
+  for i = 1, 40 do stock["minecraft:item_" .. string.format("%02d", i)] = i * 10 end
+  local storage, device, screen = setup(stock, 50, 20)
+
+  local pages = monitor.draw(screen, storage, 1)
+  check(pages > 1, "hay mas de una pagina: " .. pages)
+  local first = device.text()
+  check(first:find("1/" .. pages, 1, true) ~= nil, "muestra el indicador de pagina")
+
+  monitor.draw(screen, storage, 2)
+  local second = device.text()
+  check(first ~= second, "la segunda pagina muestra otra cosa")
+  check(second:find("2/" .. pages, 1, true) ~= nil, "y lo indica")
+end)
+
+test("avisa cuando queda poco espacio", function()
+  -- Un solo cofre de 1 slot: se llena con el primer stack.
+  mock.reset({
+    { name = IN, size = 27 }, { name = OUT, size = 27 },
+    { name = "minecraft:chest_0", size = 1 },
+  })
+  mterm.reset()
+  for _, mod in ipairs({ "lib.storage", "lib.items" }) do package.loaded[mod] = nil end
+  require("lib.items").reset()
+  local storage = require("lib.storage")
+  storage.init({ input = IN, output = OUT, ignore = {} })
+  storage.refresh()
+  mock.give(IN, "minecraft:cobblestone", 64)
+  storage.store()
+
+  local device = fakeMonitor(50, 20)
+  monitor.draw(draw.new(device, function() end, true), storage)
+  check(device.text():find("ESPACIO BAJO", 1, true) ~= nil, "lo dice en el pie")
 end)
 
 test("avisa cuando no hay nada guardado", function()
@@ -207,7 +246,7 @@ test("se adapta a un monitor chico sin romperse", function()
   local storage, device, screen = setup({ ["minecraft:cobblestone"] = 300 }, 18, 5)
   monitor.draw(screen, storage)
   local text = device.text()
-  check(text:find("cc%-organizer") ~= nil, "entra el titulo recortado")
+  check(text:find("cc%-organizer") ~= nil, "el monitor chico usa el titulo simple")
   for line in text:gmatch("[^\n]+") do
     check(#line <= 18, "ninguna linea se pasa del ancho: " .. #line)
   end

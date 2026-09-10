@@ -13,6 +13,8 @@ local FILES = {
   "startup.lua",
   "lib/draw.lua",
   "lib/dialog.lua",
+  "lib/pixels.lua",
+  "lib/bigtext.lua",
   "lib/icons.lua",
   "lib/items.lua",
   "lib/monitor.lua",

@@ -1,80 +1,205 @@
--- Panel de solo lectura en un monitor: stock y ocupacion, en vivo.
+-- Panel de solo lectura en un monitor: stock, actividad y ocupacion, en vivo.
 --
 -- No toca el estado: solo lee el indice y dibuja. Si no hay monitor conectado
 -- se queda esperando a que aparezca uno.
+--
+-- El panel esta pensado como tablero, no como volcado de datos: titulo en letra
+-- grande, secciones separadas por reglas finas de subpixel, y las cosas que se
+-- miran de lejos (ocupacion, ultimo movimiento) con jerarquia propia.
 
 local draw = require("lib.draw")
+local pixels = require("lib.pixels")
+local bigtext = require("lib.bigtext")
+local items = require("lib.items")
+local icons = require("lib.icons")
 
 local monitor = {}
 
-local COLUMN = 22  -- 7 de cantidad + espacio + 14 de nombre
+local TITLE = "CC-ORGANIZER"
+local ACTIVITY_WIDTH = 24  -- 5 de cantidad + espacio + nombre
+local LOW_SPACE = 0.1      -- por debajo de esto, el panel avisa
 
 -- Que esta pasando con el monitor, para mostrarlo en el diagnostico (F3).
 monitor.status = { state = "sin arrancar" }
 
---- Barra de ocupacion: mas legible de lejos que "151/162".
+--- 12345 -> "12k", para que las cantidades no rompan la grilla.
+local function short(n)
+  if n < 1000 then return tostring(n) end
+  if n < 1000000 then
+    local k = n / 1000
+    return (k < 10 and ("%.1fk"):format(k) or ("%dk"):format(math.floor(k)))
+  end
+  return ("%.1fM"):format(n / 1000000)
+end
+
+--- Barra de ocupacion. Sin color el vacio va en negro: si fuera gris, en un
+--- monitor comun el lleno y el vacio se dibujarian los dos blancos.
 local function bar(screen, x, y, width, used, total)
-  local filled = total > 0 and math.floor(width * used / total + 0.5) or 0
-  -- Sin color, cualquier fondo que no sea negro se dibuja blanco: si el vacio
-  -- tambien fuera gris, la barra seria un rectangulo blanco sin informacion.
+  local ratio = total > 0 and used / total or 0
+  local filled = math.floor(width * ratio + 0.5)
+  local low = total > 0 and (total - used) / total < LOW_SPACE
+  local fullBg = low and colours.red or colours.lime
   local emptyBg = screen.colour and colours.grey or colours.black
-  screen:paint(colours.white, colours.lime)
+
+  screen:paint(colours.white, screen.colour and fullBg or colours.white)
   screen:at(x, y, string.rep(" ", math.min(filled, width)))
   if filled < width then
     screen:paint(colours.white, emptyBg)
     screen:at(x + filled, y, string.rep(" ", width - filled))
   end
+  return low
 end
 
---- Dibuja el panel entero. Se le pasa el canvas para poder testearlo.
-function monitor.draw(screen, storage)
-  local W, H = screen:size()
+--- Totales por categoria, de mayor a menor.
+local function categories(stock)
+  local totals, order = {}, {}
+  for _, entry in ipairs(stock) do
+    local name = icons.category(entry.key)
+    if not totals[name] then
+      totals[name] = 0
+      order[#order + 1] = name
+    end
+    totals[name] = totals[name] + entry.total
+  end
+  table.sort(order, function(a, b) return totals[a] > totals[b] end)
+  local out = {}
+  for i, name in ipairs(order) do out[i] = { name = name, total = totals[name] } end
+  return out
+end
+
+--- Panel completo, para monitores con lugar de sobra.
+local function drawFull(screen, storage, page, W, H)
+  local stock = storage.stock()
+  local space = storage.space()
+  local rule = screen.colour and colours.grey or colours.white
+
+  -- Titulo grande y, al lado, el resumen de la red.
+  bigtext.draw(screen, 2, 1, TITLE, colours.white, colours.black)
+  screen:paint(colours.lightGrey, colours.black)
+  screen:right(W - 1, 1, ("%d tipos"):format(#stock))
+  screen:right(W - 1, 2, ("%d cofres"):format(space.chests))
+  pixels.ruleH(screen, 1, 3, W, rule, colours.black)
+
+  -- Cuerpo: stock a la izquierda, actividad a la derecha.
+  local top, bottom = 4, H - 3
+  local rows = math.max(1, bottom - top)
+  local activityX = W - ACTIVITY_WIDTH + 1
+  local hasActivity = activityX > 26
+  local stockWidth = (hasActivity and activityX - 3 or W - 2)
+
+  if hasActivity then
+    pixels.ruleV(screen, activityX - 2, top, rows + 1, rule, colours.black)
+    screen:paint(colours.lightGrey, colours.black)
+    screen:at(activityX, top, draw.fit("ACTIVIDAD", ACTIVITY_WIDTH - 1))
+    local log = storage.activity(rows - 1)
+    for i, move in ipairs(log) do
+      screen:paint(move.sign == "+" and colours.lime or colours.orange, colours.black)
+      screen:at(activityX, top + i, move.sign .. short(move.count))
+      screen:paint(colours.white, colours.black)
+      screen:at(activityX + 6, top + i, draw.fit(items.displayName(move.key), ACTIVITY_WIDTH - 7))
+    end
+    if #log == 0 then
+      screen:paint(colours.grey, colours.black)
+      screen:at(activityX, top + 1, "sin movimientos")
+    end
+  end
+
+  -- Stock paginado: con muchos items el panel va rotando solo.
+  local pages = math.max(1, math.ceil(#stock / (rows - 1)))
+  page = ((page or 1) - 1) % pages + 1
+  local first = (page - 1) * (rows - 1)
+
+  screen:paint(colours.lightGrey, colours.black)
+  screen:at(2, top, "STOCK")
+  for i = 1, rows - 1 do
+    local entry = stock[first + i]
+    if entry then
+      screen:paint(colours.yellow, colours.black)
+      screen:right(7, top + i, short(entry.total))
+      screen:paint(colours.white, colours.black)
+      screen:at(9, top + i, draw.fit(entry.display, stockWidth - 8))
+    end
+  end
+  if #stock == 0 then
+    screen:paint(colours.grey, colours.black)
+    screen:at(2, top + 1, "el almacenamiento esta vacio")
+  end
+
+  -- Pie: categorias y ocupacion.
+  pixels.ruleH(screen, 1, H - 2, W, rule, colours.black)
+  local parts = {}
+  for _, category in ipairs(categories(stock)) do
+    parts[#parts + 1] = ("%s %s"):format(category.name, short(category.total))
+  end
+  screen:paint(colours.lightGrey, colours.black)
+  screen:at(2, H - 1, draw.fit(table.concat(parts, "  "), W - 2))
+
+  local percent = math.floor(space.slots > 0 and space.used / space.slots * 100 or 0)
+  local label = ("%d%%  %d/%d"):format(percent, space.used, space.slots)
+  if pages > 1 then label = label .. ("  %d/%d"):format(page, pages) end
+  -- El aviso se suma al label en vez de reemplazarlo: cuando el sistema se esta
+  -- llenando es justo cuando queres ver la ocupacion y la pagina.
+  local low = (space.slots > 0 and (space.free / space.slots) < LOW_SPACE)
+  if low then label = "ESPACIO BAJO  " .. label end
+  local barWidth = math.max(4, W - #label - 4)
+  bar(screen, 2, H, barWidth, space.used, space.slots)
+  screen:paint(low and colours.red or colours.lightGrey, colours.black)
+  screen:right(W - 1, H, label)
+  return pages
+end
+
+--- Version compacta para monitores chicos: sin titulo grande ni columnas.
+local function drawCompact(screen, storage, page, W, H)
   local stock = storage.stock()
   local space = storage.space()
 
-  screen:clear()
-
-  local title, types = " cc-organizer", ("%d tipos"):format(#stock)
   screen:paint(colours.black, colours.cyan)
-  screen:at(1, 1, draw.fit(title, W))
-  -- En un monitor angosto el titulo gana: el contador se dibuja solo si entra.
-  if W >= #title + #types + 2 then
-    screen:right(W - 1, 1, types)
+  screen:at(1, 1, draw.fit(" cc-organizer", W))
+
+  local rows = math.max(1, H - 3)
+  local pages = math.max(1, math.ceil(#stock / rows))
+  page = ((page or 1) - 1) % pages + 1
+  local first = (page - 1) * rows
+
+  for i = 1, rows do
+    local entry = stock[first + i]
+    if entry then
+      screen:paint(colours.yellow, colours.black)
+      screen:right(6, 1 + i, short(entry.total))
+      screen:paint(colours.white, colours.black)
+      screen:at(8, 1 + i, draw.fit(entry.display, W - 8))
+    end
   end
-
-  -- Ocupacion: barra a la izquierda, numeros a la derecha.
-  local label = ("%d/%d slots"):format(space.used, space.slots)
-  local barWidth = math.max(4, W - #label - 3)
-  bar(screen, 2, 2, barWidth, space.used, space.slots)
-  screen:paint(colours.lightGrey, colours.black)
-  screen:right(W - 1, 2, label)
-
-  -- Items en tantas columnas como entren.
-  local top, bottom = 4, H - 1
-  local visibleRows = math.max(1, bottom - top + 1)
-  local columns = math.max(1, math.floor((W - 1) / COLUMN))
-  for i = 1, math.min(#stock, visibleRows * columns) do
-    local entry = stock[i]
-    local column = math.floor((i - 1) / visibleRows)
-    local x = 2 + column * COLUMN
-    local y = top + (i - 1) % visibleRows
-    screen:paint(colours.yellow, colours.black)
-    screen:right(x + 6, y, tostring(entry.total))
-    screen:paint(colours.white, colours.black)
-    screen:at(x + 8, y, draw.fit(entry.display, COLUMN - 9))
-  end
-
   if #stock == 0 then
     screen:paint(colours.grey, colours.black)
-    screen:at(2, top, "el almacenamiento esta vacio")
+    screen:at(2, 2, "vacio")
   end
 
-  screen:paint(colours.black, colours.grey)
-  screen:at(1, H, draw.fit((" %d cofres   %d slots libres"):format(space.chests, space.free), W))
-  screen:cursor(1, 1, false)
-  screen:present()
+  local label = ("%d/%d"):format(space.used, space.slots)
+  local barWidth = math.max(3, W - #label - 3)
+  bar(screen, 2, H - 1, barWidth, space.used, space.slots)
+  screen:paint(colours.lightGrey, colours.black)
+  screen:right(W - 1, H - 1, label)
+  screen:paint(colours.black, screen.colour and colours.grey or colours.white)
+  screen:at(1, H, draw.fit((" %d cofres  %d libres"):format(space.chests, space.free), W))
+  return pages
 end
 
+--- Dibuja el panel. `page` es la pagina del stock; devuelve cuantas hay.
+function monitor.draw(screen, storage, page)
+  local W, H = screen:size()
+  screen:clear()
+  local titleWidth = bigtext.size(TITLE)
+  local pages
+  if H >= 11 and W >= titleWidth + 12 then
+    pages = drawFull(screen, storage, page, W, H)
+  else
+    pages = drawCompact(screen, storage, page, W, H)
+  end
+  screen:cursor(1, 1, false)
+  screen:present()
+  return pages
+end
 --- Prepara el canvas sobre el monitor. nil + motivo si no se puede.
 function monitor.attach()
   local device = peripheral.find("monitor")
@@ -109,6 +234,7 @@ end
 --- antes esto se tragaba cualquier error y reintentaba callado para siempre.
 function monitor.run(storage, notify)
   local screen, warned
+  local page, pages = 1, 1
   while true do
     if not screen then
       local canvas, err = monitor.attach()
@@ -120,9 +246,12 @@ function monitor.run(storage, notify)
     end
 
     if screen then
-      local ok, err = pcall(monitor.draw, screen, storage)
+      local ok, err = pcall(monitor.draw, screen, storage, page)
       if ok then
+        pages = err or 1
+        page = page % math.max(1, pages) + 1
         monitor.status.state = "dibujando"
+        monitor.status.pages = pages
         monitor.status.frames = (monitor.status.frames or 0) + 1
       else
         screen = nil

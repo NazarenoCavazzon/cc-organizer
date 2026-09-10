@@ -80,10 +80,35 @@ solo.
 
 ## Panel en un monitor
 
-Si hay un monitor en la red (o pegado a la computadora) se dibuja solo un panel
-de solo lectura con el stock, una barra de ocupacion y los cofres. Anda igual en
-un monitor comun: sin color la barra se dibuja blanco sobre negro en vez de dos
-grises que se verian iguales. Se actualiza
+Si hay un monitor en la red (o pegado a la computadora) se dibuja solo, sin
+configurar nada:
+
+```
+ CC-ORGANIZER (en letra grande)              15 tipos
+ ---------------------------------------------------
+ STOCK                        | ACTIVIDAD
+   1.7k Cobblestone           | -64   Oak Log
+   1.2k Sand                  | +833  Coal
+    999 Torch                 | +96   Gold Ingot
+ ---------------------------------------------------
+ bloques 4.6k  materiales 4.1k  comida 64
+ #########------  65%  142/216  1/2
+```
+
+- **Titulo en letra grande**, dibujado con una tipografia de 3x5 pixeles sobre
+  los subpixeles del monitor (`lib/bigtext.lua`), para que se lea de lejos.
+- **Actividad**: las ultimas entradas y salidas, `+` lo que se guardo, `-` lo que
+  se entrego.
+- **Paginacion**: si el stock no entra, el panel rota solo cada 5 segundos y lo
+  indica abajo a la derecha (`1/2`).
+- **Resumen por categoria** y barra de ocupacion, con aviso `ESPACIO BAJO`
+  cuando queda menos del 10% de slots.
+- Las secciones se separan con reglas finas dibujadas a subpixel, no con lineas
+  de guiones.
+
+Anda igual en un monitor comun: sin color la barra se dibuja blanco sobre negro
+en vez de dos grises que se verian iguales, y en monitores chicos cae a un
+layout compacto sin titulo grande ni columnas. Se actualiza
 cuando algo cambia y cada 5 segundos, y se acomoda al tamano del monitor: usa
 tantas columnas como entren. No hay que configurar nada; si conectas el monitor
 con el programa andando, lo detecta.
@@ -130,6 +155,8 @@ lib/items.lua      claves de item, cache de nombres, busqueda
 lib/ui.lua         TUI: lista, busqueda y eventos
 lib/dialog.lua     ventanas modales (cantidad, detalle, ayuda)
 lib/draw.lua       helpers de dibujo sobre el buffer
+lib/pixels.lua     dibujo a subpixel (2x3 por caracter)
+lib/bigtext.lua    tipografia de 3x5 para titulos y numeros
 lib/icons.lua      sprites procedurales de 16x12
 lib/monitor.lua    panel de solo lectura en un monitor
 lib/setup.lua      asistente de configuracion

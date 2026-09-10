@@ -1,0 +1,2 @@
+# jars de paso (por ejemplo el build casero de Iris), no van al repo
+*.jar

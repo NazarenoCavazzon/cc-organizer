@@ -18,6 +18,23 @@ local index = {}        -- key -> {key, total, locs = { {chest, slot, count} }}
 -- Evita que el guardado automatico y un comando del usuario muevan items a la vez.
 storage.busy = false
 
+-- Ultimos movimientos, mas reciente primero, para el panel del monitor.
+local activity = {}
+local ACTIVITY_MAX = 20
+
+local function logActivity(sign, key, count)
+  if not count or count <= 0 then return end
+  table.insert(activity, 1, { sign = sign, key = key, count = count })
+  while #activity > ACTIVITY_MAX do table.remove(activity) end
+end
+
+--- Los ultimos `n` movimientos: { sign = "+" o "-", key, count }.
+function storage.activity(n)
+  local out = {}
+  for i = 1, math.min(n or ACTIVITY_MAX, #activity) do out[i] = activity[i] end
+  return out
+end
+
 local BATCH = 40
 
 -- Los peripherals pegados directo a la computadora se llaman por su lado. Esos
@@ -198,6 +215,7 @@ function storage.store()
   if not ok or not list then return 0, 0, "no puedo leer el cofre de entrada" end
 
   local moved, left, touched, moveError = 0, 0, {}, nil
+  local movedByKey = {}
   for slot, item in pairs(list) do
     local key = items.key(item)
     if not items.hasMeta(key) then
@@ -213,6 +231,7 @@ function storage.store()
       elseif n and n > 0 then
         remaining = remaining - n
         moved = moved + n
+        movedByKey[key] = (movedByKey[key] or 0) + n
         touched[c.name] = true
         -- Re-leer ahora mantiene exacta la capacidad para los slots que siguen.
         readChest(c)
@@ -222,6 +241,7 @@ function storage.store()
   end
 
   if next(touched) then rebuildIndex() end
+  for key, count in pairs(movedByKey) do logActivity("+", key, count) end
   if left > 0 then
     if #chests == 0 then
       return moved, left, "no hay cofres de almacenamiento en la red"
@@ -344,6 +364,7 @@ function storage.take(key, amount)
   end
 
   if next(touched) then rescan(touched) end
+  logActivity("-", key, moved)
   if moved < amount then
     if not outputHasRoom(key) then return moved, "cofre de salida lleno" end
     return moved, "no hay mas stock"
