@@ -94,6 +94,29 @@ local function shortCount(n)
   return ("%dk"):format(math.floor(n / 1000))
 end
 
+--- Badge de la derecha de cada fila: "87%" de durabilidad y "*" si esta
+--- encantado. Es lo unico que distingue dos picos de diamante con el mismo
+--- nombre, porque el juego no los renombra.
+local function wearBadge(key)
+  local wear = items.wear(key)
+  local enchanted = items.isEnchanted(key)
+  if not wear and not enchanted then return nil end
+
+  local text = enchanted and "*" or ""
+  local c = colours.lightBlue
+  if wear then
+    if wear.unbreakable then
+      text = text .. "irr"
+      c = colours.lightBlue
+    else
+      text = text .. ("%d%%"):format(wear.percent)
+      c = wear.percent >= 50 and colours.lime
+          or wear.percent >= 25 and colours.yellow or colours.red
+    end
+  end
+  return text, c
+end
+
 local function setMessage(text, c)
   message, messageColour = text, c or colours.lightGrey
   dirty = true
@@ -193,8 +216,15 @@ local function drawList()
     if entry then
       screen:paint(selected and colours.black or colours.yellow, bg)
       screen:right(7, y, shortCount(entry.total))
+      local badge, badgeColour = wearBadge(entry.key)
+      local nameWidth = math.max(1, W - 10 - (badge and #badge + 1 or 0))
       screen:paint(fg, bg)
-      screen:at(9, y, draw.fit(entry.display, W - 10))
+      screen:at(9, y, draw.fit(entry.display, nameWidth))
+      if badge then
+        -- En la fila seleccionada el fondo ya es de color: el negro se lee mejor.
+        screen:paint(selected and colours.black or badgeColour, bg)
+        screen:right(W - 2, y, badge)
+      end
     end
 
     -- Barra de scroll.
@@ -233,6 +263,9 @@ local function showHelp()
   dialog.message("atajos", {
     "escribir        filtra la lista",
     "#logs #ores     filtra por tag del juego",
+    "fortune         tambien busca encantamientos",
+    "87%             durabilidad que le queda",
+    "*               esta encantado",
     "flechas < >     cambia de categoria",
     "flechas         mover la seleccion",
     "rePag / avPag   pagina entera",
@@ -290,12 +323,28 @@ local function showDetail()
   local entry = rows[sel]
   if not entry then return end
   local locations = storage.locations(entry.key)
-  local lines = {
-    entry.key,
-    ("%d unidades"):format(entry.total),
-    ("apila de a %d"):format(items.maxCount(entry.key)),
-    ("en %d %s"):format(#locations, #locations == 1 and "cofre" or "cofres"),
-  }
+  local lines = { entry.key,
+                  ("%d %s"):format(entry.total, entry.total == 1 and "unidad" or "unidades") }
+
+  local wear = items.wear(entry.key)
+  if wear then
+    if wear.unbreakable then
+      lines[#lines + 1] = "irrompible"
+    else
+      lines[#lines + 1] = ("durabilidad %d%% [%s]"):format(wear.percent, items.bar(wear.ratio, 10))
+      lines[#lines + 1] = ("quedan %d de %d usos"):format(wear.left, wear.maxDamage)
+    end
+  else
+    lines[#lines + 1] = ("apila de a %d"):format(items.maxCount(entry.key))
+  end
+
+  local enchantments = items.enchantments(entry.key)
+  if #enchantments > 0 then
+    lines[#lines + 1] = "encantamientos:"
+    for _, e in ipairs(enchantments) do lines[#lines + 1] = "  " .. e end
+  end
+
+  lines[#lines + 1] = ("en %d %s"):format(#locations, #locations == 1 and "cofre" or "cofres")
   for _, loc in ipairs(locations) do
     lines[#lines + 1] = ("  %-22s %5d en %d %s")
       :format(loc.chest, loc.count, loc.slots, loc.slots == 1 and "slot" or "slots")

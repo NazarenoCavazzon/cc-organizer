@@ -1,11 +1,24 @@
 -- Claves de item y cache de metadatos.
 --
--- `list()` solo devuelve name/count/nbt. `getItemDetail()` trae displayName y
--- maxCount pero es caro, asi que se consulta una sola vez por clave y se cachea.
+-- `list()` solo devuelve name/count/nbt. `getItemDetail()` trae displayName,
+-- maxCount, durabilidad y encantamientos, pero es caro: se consulta una sola vez
+-- por clave y se cachea.
 
 local items = {}
 
 local meta = {}
+
+local ROMAN = { "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X" }
+
+--- "minecraft:efficiency" + nivel 5 -> "Efficiency V".
+local function enchantLabel(e)
+  if type(e.displayName) == "string" and e.displayName ~= "" then return e.displayName end
+  local name = tostring(e.name or "?"):match("[^:]+$") or "?"
+  name = name:gsub("_", " "):gsub("^%l", string.upper)
+  local level = tonumber(e.level)
+  if not level or level <= 1 then return name end
+  return name .. " " .. (ROMAN[level] or tostring(level))
+end
 
 --- Clave unica de un item. Dos stacks con NBT distinto (encantamientos,
 --- durabilidad, componentes) no se apilan, asi que son claves distintas.
@@ -27,10 +40,33 @@ function items.setMeta(key, detail)
     for tag in pairs(detail.tags) do tags[#tags + 1] = tag end
     table.sort(tags)
   end
+
+  -- Las herramientas se gastan. Segun la version, getItemDetail trae
+  -- `durability` (fraccion restante) o solo damage/maxDamage; aceptamos las dos.
+  local maxDamage = tonumber(detail.maxDamage)
+  local damage = tonumber(detail.damage) or 0
+  local ratio = tonumber(detail.durability)
+  if not ratio and maxDamage and maxDamage > 0 then
+    ratio = 1 - damage / maxDamage
+  end
+  if ratio then ratio = math.max(0, math.min(1, ratio)) end
+
+  local enchantments = {}
+  if type(detail.enchantments) == "table" then
+    for _, e in ipairs(detail.enchantments) do
+      if type(e) == "table" then enchantments[#enchantments + 1] = enchantLabel(e) end
+    end
+  end
+
   meta[key] = {
     displayName = detail.displayName or detail.name,
     maxCount = detail.maxCount or 64,
     tags = tags,
+    damage = damage,
+    maxDamage = maxDamage,
+    durability = ratio,
+    unbreakable = detail.unbreakable and true or false,
+    enchantments = enchantments,
   }
 end
 
@@ -38,6 +74,37 @@ end
 function items.tags(key)
   local m = meta[key]
   return m and m.tags or {}
+end
+
+--- Encantamientos ya formateados ("Efficiency V"), o lista vacia.
+function items.enchantments(key)
+  local m = meta[key]
+  return m and m.enchantments or {}
+end
+
+function items.isEnchanted(key)
+  return #items.enchantments(key) > 0
+end
+
+--- Desgaste de una herramienta, o nil si el item no se gasta.
+--- { ratio = 0..1, percent = 0..100, left = usos, maxDamage, unbreakable }
+function items.wear(key)
+  local m = meta[key]
+  if not m or not m.durability or not m.maxDamage or m.maxDamage <= 0 then return nil end
+  return {
+    ratio = m.durability,
+    -- Se redondea hacia arriba para no mostrar 0% en algo que todavia sirve.
+    percent = math.min(100, math.ceil(m.durability * 100)),
+    left = math.floor(m.durability * m.maxDamage + 0.5),
+    maxDamage = m.maxDamage,
+    unbreakable = m.unbreakable,
+  }
+end
+
+--- Barra ASCII de desgaste: sirve igual en un monitor sin color.
+function items.bar(ratio, width)
+  local filled = math.max(0, math.min(width, math.floor(ratio * width + 0.5)))
+  return string.rep("#", filled) .. string.rep("-", width - filled)
 end
 
 function items.hasMeta(key)
@@ -75,7 +142,14 @@ local function matchesTag(key, filter)
   return false
 end
 
---- true si el texto aparece en el id o en el nombre visible.
+local function matchesEnchant(key, filter)
+  for _, e in ipairs(items.enchantments(key)) do
+    if e:lower():find(filter, 1, true) then return true end
+  end
+  return false
+end
+
+--- true si el texto aparece en el id, en el nombre visible o en un encantamiento.
 --- El namespace se ignora salvo que lo escribas: si no, buscar "in" o "raf"
 --- matchearia "minecraft:" y por lo tanto todo el inventario.
 function items.matches(key, filter)
@@ -88,7 +162,8 @@ function items.matches(key, filter)
   local id = filter:find(":", 1, true) and key or (key:match("^.-:(.*)$") or key)
   if id:lower():find(filter, 1, true) then return true end
   local m = meta[key]
-  return m ~= nil and m.displayName:lower():find(filter, 1, true) ~= nil
+  if m and m.displayName:lower():find(filter, 1, true) then return true end
+  return matchesEnchant(key, filter)
 end
 
 --- 1234 -> "1234 (19x64)" para leer cantidades grandes de un vistazo.

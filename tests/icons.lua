@@ -26,16 +26,54 @@ test("clasifica items por tipo y material", function()
   eq(icons.describe("minecraft:iron_ingot").colour, "lightGrey", "color del hierro")
   eq(icons.describe("minecraft:diamond").kind, "gem", "gema")
   eq(icons.describe("minecraft:diamond").colour, "lightBlue", "color del diamante")
-  eq(icons.describe("minecraft:diamond_pickaxe").kind, "tool", "herramienta antes que gema")
+  eq(icons.describe("minecraft:diamond_pickaxe").kind, "pickaxe", "herramienta antes que gema")
   eq(icons.describe("minecraft:golden_apple").kind, "food", "comida antes que oro")
   eq(icons.describe("minecraft:oak_log").colour, "brown", "madera")
   eq(icons.describe("minecraft:cobblestone").kind, "block", "el default es bloque")
   eq(icons.describe("minecraft:redstone").kind, "dust", "polvo")
 end)
 
+test("cada herramienta tiene su propia silueta", function()
+  mterm.reset()
+  -- El problema que resuelve: un pico y un hacha de diamante comparten color y
+  -- nombre parecido; si comparten dibujo no hay forma de distinguirlos.
+  local kinds = {}
+  for key, expected in pairs({
+    ["minecraft:diamond_pickaxe"] = "pickaxe", ["minecraft:diamond_axe"] = "axe",
+    ["minecraft:diamond_shovel"] = "shovel", ["minecraft:diamond_hoe"] = "hoe",
+    ["minecraft:diamond_sword"] = "sword", ["minecraft:shears"] = "shears",
+    ["minecraft:bow"] = "bow", ["minecraft:shield"] = "shield",
+    ["minecraft:iron_helmet"] = "helmet", ["minecraft:iron_chestplate"] = "chestplate",
+    ["minecraft:iron_leggings"] = "leggings", ["minecraft:iron_boots"] = "boots",
+  }) do
+    eq(icons.describe(key).kind, expected, key)
+    eq(icons.category(key), "herramientas", "sigue siendo herramienta: " .. key)
+
+    local shape = icons.shape(key)
+    eq(#shape, 12, "12 filas de pixeles: " .. key)
+    for _, row in ipairs(shape) do
+      eq(#row, 16, "16 pixeles de ancho: " .. key)
+    end
+
+    local art = table.concat(shape, "/")
+    check(kinds[art] == nil, ("%s se dibuja igual que %s"):format(key, tostring(kinds[art])))
+    kinds[art] = key
+  end
+end)
+
+test("el material sigue decidiendo el color de la herramienta", function()
+  mterm.reset()
+  eq(icons.describe("minecraft:diamond_pickaxe").colour, "lightBlue", "diamante")
+  eq(icons.describe("minecraft:iron_pickaxe").colour, "lightGrey", "hierro")
+  eq(icons.describe("minecraft:golden_pickaxe").colour, "yellow", "oro")
+  eq(icons.describe("minecraft:netherite_pickaxe").colour, "brown", "netherite")
+  eq(icons.describe("minecraft:stone_pickaxe").colour, "grey", "piedra")
+  eq(icons.describe("minecraft:wooden_pickaxe").colour, "brown", "madera")
+end)
+
 test("el item con NBT usa el icono del item base", function()
   mterm.reset()
-  eq(icons.describe("minecraft:diamond_sword@abc123").kind, "tool", "ignora el NBT")
+  eq(icons.describe("minecraft:diamond_sword@abc123").kind, "sword", "ignora el NBT")
   eq(icons.describe("minecraft:diamond_sword@abc").colour,
      icons.describe("minecraft:diamond_sword").colour, "y el color no cambia")
 end)

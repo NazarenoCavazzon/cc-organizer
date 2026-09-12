@@ -27,6 +27,10 @@ local SIDES = {
   top = true, bottom = true, left = true, right = true, front = true, back = true,
 }
 
+-- Campos extra de getItemDetail (durabilidad, encantamientos), por nbt o por
+-- nombre de item: las herramientas del juego llegan siempre con nbt propio.
+local EXTRA = {}
+
 local function maxCount(name) return MAXCOUNT[name] or 64 end
 
 local function displayName(name)
@@ -79,10 +83,14 @@ local function newChest(name, size, network)
     if not it then return nil end
     local tags = {}
     for _, tag in ipairs(TAGS[it.name] or {}) do tags[tag] = true end
-    return {
+    local detail = {
       name = it.name, nbt = it.nbt, count = it.count, tags = tags,
       displayName = displayName(it.name), maxCount = maxCount(it.name),
     }
+    for field, value in pairs(EXTRA[it.nbt or ""] or EXTRA[it.name] or {}) do
+      detail[field] = value
+    end
+    return detail
   end
 
   function c.pullItems(fromName, fromSlot, limit)
@@ -113,7 +121,7 @@ end
 
 --- Arranca un mundo nuevo. `spec` es una lista de {name=, size=}.
 function mock.reset(spec)
-  registry, order, types = {}, {}, {}
+  registry, order, types, EXTRA = {}, {}, {}, {}
   for _, s in ipairs(spec) do
     registry[s.name] = newChest(s.name, s.size, s.network)
     types[s.name] = "inventory"
@@ -164,6 +172,12 @@ function mock.attach(name, kind, object)
 end
 
 --- Pone items en un cofre directamente (sin pasar por el sistema).
+--- Lo que getItemDetail va a agregar para ese nbt (o para ese item sin nbt):
+--- damage, maxDamage, durability, enchantments, unbreakable.
+function mock.setDetail(nbtOrName, extra)
+  EXTRA[nbtOrName] = extra
+end
+
 function mock.give(name, itemName, count, nbt)
   local c = assert(registry[name], "cofre inexistente: " .. tostring(name))
   return insert(c, { name = itemName, nbt = nbt }, count)

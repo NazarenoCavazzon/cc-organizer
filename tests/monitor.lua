@@ -76,8 +76,13 @@ local function setup(stock, width, height)
   local storage = require("lib.storage")
   storage.init({ input = IN, output = OUT, ignore = {} })
   storage.refresh()
-  for name, count in pairs(stock or {}) do
-    mock.give(IN, name, count)
+  -- Ordenado a proposito: con pairs, el orden de insercion cambia entre
+  -- interpretes y el resultado del test dejaria de ser reproducible.
+  local names = {}
+  for name in pairs(stock or {}) do names[#names + 1] = name end
+  table.sort(names)
+  for _, name in ipairs(names) do
+    mock.give(IN, name, stock[name])
     storage.store()
   end
   storage.refresh()
@@ -201,9 +206,12 @@ test("el titulo grande se dibuja con subpixeles", function()
 end)
 
 test("rota paginas cuando no entra todo el stock", function()
+  -- Cantidades chicas a proposito: 40 tipos a 10 stacks cada uno no entran en
+  -- los dos cofres del mundo de prueba y la mitad se quedaria sin guardar.
   local stock = {}
-  for i = 1, 40 do stock["minecraft:item_" .. string.format("%02d", i)] = i * 10 end
+  for i = 1, 40 do stock["minecraft:item_" .. string.format("%02d", i)] = i * 2 end
   local storage, device, screen = setup(stock, 50, 20)
+  eq(#storage.stock(), 40, "entraron los 40 tipos")
 
   local pages = monitor.draw(screen, storage, 1)
   check(pages > 1, "hay mas de una pagina: " .. pages)

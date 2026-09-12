@@ -303,6 +303,56 @@ test("filtra por tag del juego con #", function()
   eq(#storage.stock("log"), 2, "sin # sigue siendo busqueda por nombre")
 end)
 
+test("guarda durabilidad y encantamientos de las herramientas", function()
+  local storage, items = setup({ { name = "minecraft:chest_0", size = 27 } })
+  -- Dos picos de diamante identicos de nombre: en el juego solo los distingue
+  -- el nbt, y para el jugador, el desgaste y los encantamientos.
+  mock.setDetail("gastado", {
+    damage = 1000, maxDamage = 1561,
+    enchantments = {
+      { name = "minecraft:efficiency", level = 5 },
+      { name = "minecraft:unbreaking", level = 3, displayName = "Unbreaking III" },
+    },
+  })
+  mock.setDetail("nuevo", { damage = 0, maxDamage = 1561 })
+  mock.give(IN, "minecraft:diamond_pickaxe", 1, "gastado")
+  mock.give(IN, "minecraft:diamond_pickaxe", 1, "nuevo")
+  mock.give(IN, "minecraft:cobblestone", 64)
+  storage.store()
+
+  local worn = items.wear("minecraft:diamond_pickaxe@gastado")
+  check(worn ~= nil, "la herramienta gastada tiene desgaste")
+  eq(worn.percent, 36, "quedan 561 de 1561 usos")
+  eq(worn.left, 561, "usos restantes")
+  eq(items.wear("minecraft:diamond_pickaxe@nuevo").percent, 100, "el pico nuevo esta entero")
+  eq(items.wear("minecraft:cobblestone"), nil, "un bloque no se gasta")
+
+  local ench = items.enchantments("minecraft:diamond_pickaxe@gastado")
+  eq(#ench, 2, "dos encantamientos")
+  eq(ench[1], "Efficiency V", "arma el nombre con el nivel en romano")
+  eq(ench[2], "Unbreaking III", "y respeta el displayName si viene")
+  check(not items.isEnchanted("minecraft:diamond_pickaxe@nuevo"), "el nuevo no tiene")
+
+  eq(#storage.stock("efficiency"), 1, "se puede buscar por encantamiento")
+  eq(#storage.stock("pickaxe"), 2, "y por nombre siguen siendo dos")
+end)
+
+test("la durabilidad tambien sale de durability cuando no hay damage", function()
+  local storage, items = setup({ { name = "minecraft:chest_0", size = 27 } })
+  mock.setDetail("raro", { durability = 0.25, maxDamage = 200 })
+  mock.setDetail("irr", { durability = 1, maxDamage = 100, unbreakable = true })
+  mock.give(IN, "minecraft:diamond_axe", 1, "raro")
+  mock.give(IN, "minecraft:diamond_axe", 1, "irr")
+  storage.store()
+
+  eq(items.wear("minecraft:diamond_axe@raro").percent, 25, "usa la fraccion que trae el juego")
+  eq(items.wear("minecraft:diamond_axe@raro").left, 50, "50 de 200 usos")
+  check(items.wear("minecraft:diamond_axe@irr").unbreakable, "marca lo irrompible")
+  eq(items.bar(0.5, 10), "#####-----", "la barra de desgaste es ascii")
+  eq(items.bar(0, 4), "----", "vacia")
+  eq(items.bar(1, 4), "####", "llena")
+end)
+
 require("tests.icons")
 require("tests.monitor")
 require("tests.tui")

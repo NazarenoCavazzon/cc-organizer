@@ -49,12 +49,13 @@ por vos. Se puede volver a abrir con **F9**.
 | escribir | filtra la lista en vivo (por nombre o id) |
 | flechas / RePag / AvPag | mover la seleccion |
 | enter | pedir: abre el dialogo de cantidad |
-| tab | detalle del item: sprite, en que cofres esta y cuantos slots ocupa |
+| tab | detalle del item: sprite, durabilidad, encantamientos y en que cofres esta |
 | click | seleccionar; click de nuevo pide (solo Advanced Computer) |
 | click derecho | pedir todo el stock de ese item (idem) |
 | a (en el dialogo) | poner todo el stock como cantidad |
 | flechas izq/der | cambiar de categoria (todo, recientes, bloques, materiales, herramientas, comida, plantas) |
 | `#logs` `#ores` | filtrar por tag del juego, no por nombre |
+| `fortune` | la busqueda tambien mira los encantamientos |
 | F4 | repetir el ultimo pedido, con la misma cantidad |
 | ctrl+u | limpiar la busqueda |
 | F1 | ayuda |
@@ -126,6 +127,28 @@ La lista se filtra de tres formas, combinables:
 Los recientes se guardan en `recent.txt` y sobreviven al reboot. **F4** repite el
 ultimo pedido con la misma cantidad, para confirmar de nuevo.
 
+## Herramientas: durabilidad y encantamientos
+
+Dos picos de diamante se llaman igual en la lista, asi que cada herramienta
+muestra a la derecha de su fila **cuanta durabilidad le queda** (`36%`, verde
+sobre la mitad, amarillo abajo de 50, rojo abajo de 25) y un `*` si esta
+**encantada**. El detalle (tab) agrega la barra de desgaste, los usos que
+quedan y la lista de encantamientos con su nivel:
+
+```
+ Diamond Pickaxe
+ ########  minecraft:diamond_pickaxe@a
+ ########  1 unidad
+ ########  durabilidad 36% [####------]
+ ########  quedan 561 de 1561 usos
+ encantamientos:
+   Efficiency V
+   Fortune III
+```
+
+Todo sale de `getItemDetail`: `damage`/`maxDamage` (o `durability` segun la
+version) y `enchantments`. Buscar `fortune` filtra por encantamiento.
+
 ## Los sprites
 
 La terminal de CC no puede mostrar la textura real de un item, pero cada
@@ -133,9 +156,12 @@ caracter puede pintar 2x3 subpixeles con los caracteres 128..159. El detalle
 (tab) usa 8 celdas por 4 filas, o sea **16x12 pixeles**, casi la resolucion de
 una textura de Minecraft.
 
-Los dibujos son procedurales: la **forma** sale del tipo de item (lingote, gema,
-herramienta, polvo, comida, planta, liquido, palo, bloque) y el **color** del
-material (hierro gris claro, diamante celeste, madera marron...). Asi cualquier
+Los dibujos son procedurales: la **forma** sale del tipo de item y el **color**
+del material (hierro gris claro, diamante celeste, madera marron...). Cada
+herramienta tiene su propia silueta —pico, hacha, pala, azada, espada, tijeras,
+arco, escudo, casco, pechera, grebas y botas— porque un pico y un hacha del
+mismo material comparten color y nombre parecido; el resto son lingote, gema,
+polvo, comida, planta, liquido, palo y bloque. Asi cualquier
 item del juego o de un mod tiene icono sin mantener una tabla item por item; lo
 desconocido cae en un color estable sacado del nombre. Esta en `lib/icons.lua`.
 

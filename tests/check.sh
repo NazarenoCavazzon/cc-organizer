@@ -6,7 +6,7 @@
 # archivos que van a la computadora se parsean con LuaJIT, que es 5.1.
 set -e
 
-RUNTIME="startup.lua config.lua install.lua lib/draw.lua lib/dialog.lua lib/items.lua lib/setup.lua lib/storage.lua lib/ui.lua"
+RUNTIME="startup.lua config.lua install.lua lib/bigtext.lua lib/draw.lua lib/dialog.lua lib/icons.lua lib/items.lua lib/monitor.lua lib/pixels.lua lib/setup.lua lib/storage.lua lib/ui.lua"
 
 if command -v luajit > /dev/null 2>&1; then
   echo "sintaxis Lua 5.1 (como CC:Tweaked):"

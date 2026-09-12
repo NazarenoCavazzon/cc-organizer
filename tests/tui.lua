@@ -31,8 +31,12 @@ local function setup(stock, outSize, termOpts)
   storage.refresh()
 
   -- De a uno: el cofre de entrada tiene 27 slots y algun test usa 40 items.
-  for name, count in pairs(stock or {}) do
-    mock.give(IN, name, count)
+  -- Ordenado para que el resultado no dependa del orden de pairs.
+  local names = {}
+  for name in pairs(stock or {}) do names[#names + 1] = name end
+  table.sort(names)
+  for _, name in ipairs(names) do
+    mock.give(IN, name, stock[name])
     storage.store()
   end
   storage.refresh()
@@ -312,6 +316,73 @@ test("tab muestra el sprite y donde esta guardado el item", function()
     end
   end
   check(drew, "hay pixeles de sprite en la pantalla del detalle")
+end)
+
+--- Dos picos de diamante con distinto desgaste, que es el caso que no se podia
+--- distinguir en la lista.
+--- `onlyWorn` deja un solo pico, para que la seleccion no dependa del orden.
+local function setupTools(onlyWorn)
+  local storage, ui, cfg = setup({})
+  mock.setDetail("gastado", {
+    damage = 1000, maxDamage = 1561,
+    enchantments = { { name = "minecraft:efficiency", level = 5 } },
+  })
+  mock.setDetail("nuevo", { damage = 0, maxDamage = 1561 })
+  mock.give(IN, "minecraft:diamond_pickaxe", 1, "gastado")
+  if not onlyWorn then mock.give(IN, "minecraft:diamond_pickaxe", 1, "nuevo") end
+  mock.give(IN, "minecraft:cobblestone", 64)
+  storage.store()
+  storage.refresh()
+  return storage, ui, cfg
+end
+
+test("la lista muestra la durabilidad y marca lo encantado", function()
+  local storage, ui, cfg = setupTools()
+  mterm.key(mterm.KEYS.f10)
+  ui.run(storage, cfg)
+
+  local frame = mterm.lastFrame()
+  local worn = frame:match("Diamond Pickaxe%s+%*36%%")
+  local new = frame:match("Diamond Pickaxe%s+100%%")
+  check(worn ~= nil, "el pico gastado muestra 36% y el asterisco de encantado")
+  check(new ~= nil, "el pico entero muestra 100% y sin asterisco")
+
+  -- Y el bloque, que no se gasta, no gana ningun badge.
+  for line in frame:gmatch("[^\n]+") do
+    if line:find("Cobblestone", 1, true) then
+      check(line:find("%%") == nil, "un bloque no muestra durabilidad")
+    end
+  end
+end)
+
+test("el detalle de una herramienta muestra desgaste y encantamientos", function()
+  local storage, ui, cfg = setupTools(true)
+  mterm.type("pick")
+  mterm.key(mterm.KEYS.tab)
+  mterm.key(mterm.KEYS.enter)
+  mterm.key(mterm.KEYS.f10)
+  ui.run(storage, cfg)
+
+  check(mterm.anyFrame("durabilidad"), "dice la durabilidad")
+  check(mterm.anyFrame("quedan 561 de 1561 usos"), "y los usos que quedan")
+  check(mterm.anyFrame("encantamientos:"), "lista los encantamientos")
+  check(mterm.anyFrame("Efficiency V"), "con nombre y nivel")
+  local bar = false
+  for _, frame in ipairs(mterm.frames) do
+    if frame:find("%[#+%-+%]") then bar = true end
+  end
+  check(bar, "dibuja la barra de desgaste")
+end)
+
+test("se puede buscar por encantamiento", function()
+  local storage, ui, cfg = setupTools()
+  mterm.type("efficiency")
+  mterm.key(mterm.KEYS.f10)
+  ui.run(storage, cfg)
+
+  local frame = mterm.lastFrame()
+  check(frame:find("1/3 tipos", 1, true) ~= nil, "queda un solo item de los tres")
+  check(frame:find("Diamond Pickaxe", 1, true) ~= nil, "el pico encantado")
 end)
 
 test("ctrl+u limpia la busqueda", function()
