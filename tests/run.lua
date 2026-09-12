@@ -303,6 +303,140 @@ test("filtra por tag del juego con #", function()
   eq(#storage.stock("log"), 2, "sin # sigue siendo busqueda por nombre")
 end)
 
+--- Los stacks de un item que hay en un cofre, de mayor a menor.
+local function stacksIn(chest, name)
+  local out = {}
+  for _, it in pairs(mock.chest(chest).__slots) do
+    if it.name == name then out[#out + 1] = it.count end
+  end
+  table.sort(out, function(a, b) return a > b end)
+  return out
+end
+
+--- Todos los stacks de un item en la red, de mayor a menor.
+local function stacksEverywhere(chests, name)
+  local out = {}
+  for _, chest in ipairs(chests) do
+    for _, count in ipairs(stacksIn(chest, name)) do out[#out + 1] = count end
+  end
+  table.sort(out, function(a, b) return a > b end)
+  return table.concat(out, " ")
+end
+
+test("llena los stacks parciales de todos los cofres antes de abrir uno nuevo", function()
+  local storage = setup({
+    { name = "minecraft:chest_0", size = 27 },
+    { name = "minecraft:chest_1", size = 27 },
+  })
+  -- Un parcial en cada cofre: 24 y 14 de hueco.
+  mock.give("minecraft:chest_0", "minecraft:cobblestone", 40)
+  mock.give("minecraft:chest_1", "minecraft:cobblestone", 50)
+  storage.refresh()
+
+  mock.give(IN, "minecraft:cobblestone", 64)
+  local moved, left = storage.store()
+  eq(moved, 64, "guardo todo")
+  eq(left, 0, "no quedo nada en la entrada")
+
+  -- El bug era este: el stack entero se iba al cofre con mas hueco parcial y el
+  -- resto se comia un slot vacio de ahi, dejando el otro parcial sin tocar.
+  eq(stacksEverywhere({ "minecraft:chest_0", "minecraft:chest_1" }, "minecraft:cobblestone"),
+     "64 64 26", "dos stacks completos y uno solo parcial")
+end)
+
+test("saca primero de los stacks mas chicos para liberar slots", function()
+  local storage = setup({ { name = "minecraft:chest_0", size = 27 } })
+  local c = mock.chest("minecraft:chest_0")
+  c.__slots[1] = { name = "minecraft:cobblestone", count = 64 }
+  c.__slots[2] = { name = "minecraft:cobblestone", count = 10 }
+  c.__slots[3] = { name = "minecraft:cobblestone", count = 5 }
+  storage.refresh()
+  eq(storage.space().used, 3, "arranca con tres slots")
+
+  eq(storage.take("minecraft:cobblestone", 15), 15, "entrego lo pedido")
+  eq(table.concat(stacksIn("minecraft:chest_0", "minecraft:cobblestone"), " "), "64",
+     "vacio los dos parciales en vez de morder el stack lleno")
+  eq(storage.space().used, 1, "y quedan dos slots libres")
+end)
+
+test("compactar junta los parciales y libera slots", function()
+  local storage = setup({
+    { name = "minecraft:chest_0", size = 27 },
+    { name = "minecraft:chest_1", size = 27 },
+    { name = "minecraft:chest_2", size = 27 },
+  })
+  mock.give("minecraft:chest_0", "minecraft:cobblestone", 30)
+  mock.give("minecraft:chest_1", "minecraft:cobblestone", 20)
+  mock.give("minecraft:chest_2", "minecraft:cobblestone", 10)
+  storage.refresh()
+
+  local frags, recoverable = storage.fragments()
+  eq(recoverable, 2, "60 unidades en tres slots: sobran dos")
+  eq(frags[1].key, "minecraft:cobblestone", "y dice de que item")
+  eq(frags[1].stacks, 3, "cuantos parciales hay")
+
+  local freed, moves, err = storage.compact()
+  eq(err, nil, "sin errores")
+  eq(freed, 2, "libero dos slots")
+  eq(moves, 2, "en dos movimientos")
+  eq(storage.space().used, 1, "todo junto en un slot")
+  eq(storage.count("minecraft:cobblestone"), 60, "sin perder items")
+  eq(select(2, storage.fragments()), 0, "ya no hay nada para juntar")
+end)
+
+test("compactar tambien junta dos parciales del mismo cofre", function()
+  local storage = setup({ { name = "minecraft:chest_0", size = 27 } })
+  local c = mock.chest("minecraft:chest_0")
+  c.__slots[1] = { name = "minecraft:cobblestone", count = 40 }
+  c.__slots[2] = { name = "minecraft:cobblestone", count = 12 }
+  storage.refresh()
+
+  local freed, moves, err = storage.compact()
+  eq(err, nil, "un cofre puede moverse items a si mismo")
+  eq(freed, 1, "libero el slot")
+  eq(moves, 1, "un movimiento")
+  eq(table.concat(stacksIn("minecraft:chest_0", "minecraft:cobblestone"), " "), "52", "un solo stack")
+end)
+
+test("guardar junta los parciales que quedaron de antes", function()
+  local storage = setup({
+    { name = "minecraft:chest_0", size = 27 },
+    { name = "minecraft:chest_1", size = 27 },
+  })
+  mock.give("minecraft:chest_0", "minecraft:cobblestone", 30)
+  mock.give("minecraft:chest_1", "minecraft:cobblestone", 20)
+  storage.refresh()
+
+  mock.give(IN, "minecraft:cobblestone", 1)
+  eq(storage.store(), 1, "guardo el item")
+  eq(storage.space().used, 1, "y de paso junto los dos parciales viejos")
+  eq(storage.count("minecraft:cobblestone"), 51, "sin perder nada")
+  eq(storage.compactError, nil, "sin errores al juntar")
+end)
+
+test("compactar no toca items que no apilan", function()
+  local storage = setup({ { name = "minecraft:chest_0", size = 27 } })
+  mock.give("minecraft:chest_0", "minecraft:diamond_sword", 1, "a")
+  mock.give("minecraft:chest_0", "minecraft:diamond_sword", 1, "b")
+  storage.refresh()
+  eq(select(2, storage.fragments()), 0, "dos espadas distintas no son un parcial")
+  local freed, moves = storage.compact()
+  eq(freed, 0, "no libera nada")
+  eq(moves, 0, "ni intenta moverlas")
+  eq(storage.space().used, 2, "siguen en sus slots")
+end)
+
+test("avisa cuando el mismo item tiene varias variantes de NBT", function()
+  local storage = setup({ { name = "minecraft:chest_0", size = 27 } })
+  mock.give(IN, "minecraft:diamond_pickaxe", 1, "a")
+  mock.give(IN, "minecraft:diamond_pickaxe", 1, "b")
+  mock.give(IN, "minecraft:cobblestone", 64)
+  storage.store()
+
+  eq(#storage.variants("minecraft:diamond_pickaxe@a"), 2, "dos variantes del pico")
+  eq(#storage.variants("minecraft:cobblestone"), 1, "el bloque es uno solo")
+end)
+
 test("guarda durabilidad y encantamientos de las herramientas", function()
   local storage, items = setup({ { name = "minecraft:chest_0", size = 27 } })
   -- Dos picos de diamante identicos de nombre: en el juego solo los distingue

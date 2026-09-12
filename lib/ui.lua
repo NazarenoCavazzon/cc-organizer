@@ -259,33 +259,43 @@ local function render()
   dirty = false
 end
 
+-- Dos columnas, porque la lista entera no entra en un cuadro de 19 filas.
+local HELP = {
+  { "escribir", "filtra" },
+  { "#logs", "filtra por tag" },
+  { "fortune", "busca encant." },
+  { "flechas", "mover, categ." },
+  { "enter", "pedir cantidad" },
+  { "tab", "detalle" },
+  { "click", "elegir/pedir" },
+  { "click der", "pedir todo" },
+  { "ctrl+u", "limpiar busq." },
+  { "ctrl+d", "cancelar" },
+  { "F1", "ayuda" },
+  { "F2", "orden A-Z" },
+  { "F3", "diagnostico" },
+  { "F4", "repetir" },
+  { "F5", "re-escanear" },
+  { "F6", "juntar stacks" },
+  { "F9", "reconfigurar" },
+  { "F10", "salir" },
+}
+
 local function showHelp()
-  dialog.message("atajos", {
-    "escribir        filtra la lista",
-    "#logs #ores     filtra por tag del juego",
-    "fortune         tambien busca encantamientos",
-    "87%             durabilidad que le queda",
-    "*               esta encantado",
-    "flechas < >     cambia de categoria",
-    "flechas         mover la seleccion",
-    "rePag / avPag   pagina entera",
-    "enter           pedir (cantidad libre)",
-    "tab             detalle: donde esta guardado",
-    "click           elegir; de nuevo, pedir",
-    "click derecho   pedir todo el stock",
-    "                (el mouse solo anda en las",
-    "                 Advanced Computer)",
-    "ctrl+u          limpiar la busqueda",
-    "F2              orden: cantidad / A-Z",
-    "F3              diagnostico del armado",
-    "F4              repetir el ultimo pedido",
-    "F5              re-escanear la red",
-    "F9              reconfigurar entrada/salida",
-    "ctrl+d          cancelar un dialogo",
-    "F10             salir",
-    "",
-    "(el escape no sirve: cierra la computadora)",
-  })
+  local function cell(entry)
+    if not entry then return "" end
+    return ("%-9s %s"):format(entry[1], entry[2])
+  end
+  local lines = {}
+  local half = math.ceil(#HELP / 2)
+  for i = 1, half do
+    lines[#lines + 1] = draw.fit(cell(HELP[i]), 25) .. cell(HELP[i + half])
+  end
+  lines[#lines + 1] = ""
+  lines[#lines + 1] = "en la lista: * encantado, 87% durabilidad"
+  lines[#lines + 1] = "el mouse solo anda en las Advanced"
+  lines[#lines + 1] = "el escape no sirve: cierra la computadora"
+  dialog.message("atajos", lines)
   dirty = true
 end
 
@@ -307,6 +317,21 @@ local function showDiagnostics()
   end
   if mon.error then lines[#lines + 1] = "  " .. mon.error end
   if mon.frames then lines[#lines + 1] = ("  %d refrescos"):format(mon.frames) end
+  lines[#lines + 1] = ""
+  local frags, recoverable = storage.fragments()
+  if recoverable > 0 then
+    lines[#lines + 1] = ("%d slots se recuperan juntando parciales (F6):"):format(recoverable)
+    for i = 1, math.min(4, #frags) do
+      lines[#lines + 1] = ("  %-22s %d stacks parciales")
+        :format(items.displayName(frags[i].key), frags[i].stacks)
+    end
+  else
+    lines[#lines + 1] = "sin stacks parciales de mas"
+  end
+  if storage.compactError then
+    lines[#lines + 1] = "! juntar parciales fallo: " .. storage.compactError
+  end
+
   lines[#lines + 1] = ""
   lines[#lines + 1] = ("entrada: %s"):format(cfg.input)
   lines[#lines + 1] = ("salida:  %s"):format(cfg.output)
@@ -336,6 +361,12 @@ local function showDetail()
     end
   else
     lines[#lines + 1] = ("apila de a %d"):format(items.maxCount(entry.key))
+  end
+
+  local variants = storage.variants(entry.key)
+  if #variants > 1 then
+    lines[#lines + 1] = ("%d variantes con NBT distinto:"):format(#variants)
+    lines[#lines + 1] = "no se apilan entre si"
   end
 
   local enchantments = items.enchantments(entry.key)
@@ -445,6 +476,26 @@ local function doRefresh()
   recompute(true)
 end
 
+--- Junta stacks parciales a mano. Al guardar ya se hace solo para lo que entra;
+--- esto sirve despues de acomodar cofres a mano o para arreglar lo viejo.
+local function compactNow()
+  setMessage("juntando stacks parciales...")
+  render()
+  storage.busy = true
+  local ok, freed, moves, err = pcall(storage.compact)
+  storage.busy = false
+  if not ok then
+    setMessage("fallo juntar parciales: " .. tostring(freed), colours.red)
+  elseif err then
+    setMessage(("%d slots liberados, pero: %s"):format(freed, err), colours.yellow)
+  elseif moves == 0 then
+    setMessage("no hay stacks parciales para juntar", colours.lime)
+  else
+    setMessage(("%d slots liberados en %d movimientos"):format(freed, moves), colours.lime)
+  end
+  recompute(true)
+end
+
 local function onKey(key)
   if key == keys.leftCtrl or key == keys.rightCtrl then ctrlDown = true return end
 
@@ -473,6 +524,7 @@ local function onKey(key)
   elseif key == keys.f3 then showDiagnostics()
   elseif key == keys.f4 then repeatLast()
   elseif key == keys.f5 then doRefresh()
+  elseif key == keys.f6 then compactNow()
   elseif key == keys.f9 then ui.reconfigure = true; running = false
   elseif key == keys.f10 then running = false
   end

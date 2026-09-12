@@ -65,6 +65,22 @@ local function insert(chest, item, count)
   return placed
 end
 
+--- Como insert, pero en un slot concreto: es lo que hace pullItems con toSlot.
+local function insertAt(chest, item, count, slot)
+  if slot < 1 or slot > chest.__size then error("Slot out of range", 0) end
+  local max = maxCount(item.name)
+  local cur = chest.__slots[slot]
+  if cur then
+    if not sameStack(cur, item) or cur.count >= max then return 0 end
+    local n = math.min(max - cur.count, count)
+    cur.count = cur.count + n
+    return n
+  end
+  local n = math.min(max, count)
+  chest.__slots[slot] = { name = item.name, nbt = item.nbt, count = n }
+  return n
+end
+
 local function newChest(name, size, network)
   local c = { __name = name, __size = size, __slots = {}, __network = network or "main" }
 
@@ -93,7 +109,7 @@ local function newChest(name, size, network)
     return detail
   end
 
-  function c.pullItems(fromName, fromSlot, limit)
+  function c.pullItems(fromName, fromSlot, limit, toSlot)
     if SIDES[fromName] then error("Target '" .. fromName .. "' does not exist", 0) end
     local from = registry[fromName]
     if not from then error("no such peripheral: " .. tostring(fromName)) end
@@ -104,16 +120,17 @@ local function newChest(name, size, network)
     local it = from.__slots[fromSlot]
     if not it then return 0 end
     local want = math.min(limit or it.count, it.count)
-    local moved = insert(c, it, want)
+    -- Un cofre puede moverse items a si mismo (es como se juntan parciales).
+    local moved = toSlot and insertAt(c, it, want, toSlot) or insert(c, it, want)
     it.count = it.count - moved
     if it.count <= 0 then from.__slots[fromSlot] = nil end
     return moved
   end
 
-  function c.pushItems(toName, fromSlot, limit)
+  function c.pushItems(toName, fromSlot, limit, toSlot)
     local to = registry[toName]
     if not to then error("no such peripheral: " .. tostring(toName)) end
-    return to.pullItems(c.__name, fromSlot, limit)
+    return to.pullItems(c.__name, fromSlot, limit, toSlot)
   end
 
   return c

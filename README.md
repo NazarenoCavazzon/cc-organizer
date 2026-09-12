@@ -60,7 +60,8 @@ por vos. Se puede volver a abrir con **F9**.
 | ctrl+u | limpiar la busqueda |
 | F1 | ayuda |
 | F2 | ordenar por cantidad / alfabetico (o click en `[cant]`) |
-| F3 | diagnostico del armado |
+| F3 | diagnostico del armado (incluye los stacks parciales que sobran) |
+| F6 | juntar stacks parciales del mismo item |
 | F5 | re-escanear la red |
 | F9 | reconfigurar entrada/salida |
 | ctrl+d | cancelar un dialogo |
@@ -165,11 +166,24 @@ polvo, comida, planta, liquido, palo y bloque. Asi cualquier
 item del juego o de un mod tiene icono sin mantener una tabla item por item; lo
 desconocido cae en un color estable sacado del nombre. Esta en `lib/icons.lua`.
 
-## Como reparte los items
+## Como reparte los items (y no desperdicia slots)
 
-Al guardar, cada stack va primero al cofre que **ya tiene ese item** con espacio (compacta
-stacks parciales) y si no, al cofre con **mas slots libres**. Items con NBT distinto
-(encantados, con durabilidad) se indexan por separado, igual que en el juego.
+Al guardar, lo que entra **termina de llenar todos los stacks parciales que ya
+existen** —en el cofre que sea— antes de abrir un slot vacio, y recien despues va
+al cofre con mas espacio libre. Al pedir, se saca **primero de los stacks mas
+chicos**, para vaciarlos del todo y liberar el slot en vez de dejarlos ahi.
+
+Ademas, cada vez que guarda, junta los parciales viejos de los items que acaba de
+tocar. **F6** hace esa pasada sobre toda la red (util despues de acomodar cofres a
+mano) y **F3** dice cuantos slots se recuperarian.
+
+Sin esto el almacenamiento se fragmenta: en una simulacion de 8 cofres y 20 tipos
+de item, 14 rondas de guardar y pedir dejaban 10 slots tirados en medios stacks
+(`57 56 2` donde entraban dos). Ahora quedan 0.
+
+Items con NBT distinto (encantados, con durabilidad, con componentes) **no se
+apilan entre si**: son claves distintas, igual que en el juego. Cuando pasa, el
+detalle (tab) lo avisa: *"2 variantes con NBT distinto"*.
 
 ## Estructura
 

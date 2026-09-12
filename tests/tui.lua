@@ -174,6 +174,9 @@ test("F1 abre la ayuda y vuelve", function()
   ui.run(storage, cfg)
 
   check(mterm.anyFrame("atajos"), "se dibujo la ayuda")
+  check(mterm.anyFrame("F6        juntar stacks"), "entra completa y sin cortar columnas")
+  check(mterm.anyFrame("filtra por tag F1"), "las dos columnas no se pisan")
+  check(not mterm.anyFrame("lineas mas"), "sin cortar por falta de espacio")
   check(mterm.lastFrame():find("Cobblestone", 1, true) ~= nil, "volvio a la lista")
 end)
 
@@ -383,6 +386,54 @@ test("se puede buscar por encantamiento", function()
   local frame = mterm.lastFrame()
   check(frame:find("1/3 tipos", 1, true) ~= nil, "queda un solo item de los tres")
   check(frame:find("Diamond Pickaxe", 1, true) ~= nil, "el pico encantado")
+end)
+
+test("F6 junta los stacks parciales y F3 los avisa", function()
+  local storage, ui, cfg = setup({})
+  -- Dos medios stacks del mismo item en cofres distintos, como queda cuando se
+  -- acomodan cofres a mano.
+  mock.give("minecraft:chest_0", "minecraft:cobblestone", 30)
+  mock.give("minecraft:chest_1", "minecraft:cobblestone", 20)
+  storage.refresh()
+
+  mterm.key(mterm.KEYS.f3)
+  mterm.key(mterm.KEYS.enter)   -- cerrar el diagnostico
+  mterm.key(mterm.KEYS.f6)
+  mterm.key(mterm.KEYS.f10)
+  ui.run(storage, cfg)
+
+  check(mterm.anyFrame("1 slots se recuperan juntando parciales"), "el diagnostico lo avisa")
+  check(mterm.anyFrame("1 slots liberados"), "y F6 lo arregla")
+  eq(storage.space().used, 1, "quedo un solo slot ocupado")
+end)
+
+test("F6 sin nada para juntar no molesta", function()
+  local storage, ui, cfg = setup({ ["minecraft:cobblestone"] = 128 })
+  mterm.key(mterm.KEYS.f6)
+  mterm.key(mterm.KEYS.f10)
+  ui.run(storage, cfg)
+
+  check(mterm.anyFrame("no hay stacks parciales para juntar"), "lo dice y no toca nada")
+  eq(storage.space().used, 2, "los dos stacks llenos quedan como estan")
+end)
+
+test("el detalle avisa de las variantes con NBT distinto", function()
+  local storage, ui, cfg = setup({})
+  mock.setDetail("a", { damage = 100, maxDamage = 1561 })
+  mock.setDetail("b", { damage = 900, maxDamage = 1561 })
+  mock.give(IN, "minecraft:diamond_pickaxe", 1, "a")
+  mock.give(IN, "minecraft:diamond_pickaxe", 1, "b")
+  storage.store()
+  storage.refresh()
+
+  mterm.type("pick")
+  mterm.key(mterm.KEYS.tab)
+  mterm.key(mterm.KEYS.enter)
+  mterm.key(mterm.KEYS.f10)
+  ui.run(storage, cfg)
+
+  check(mterm.anyFrame("2 variantes con NBT distinto"), "explica por que hay dos filas iguales")
+  check(mterm.anyFrame("no se apilan entre si"), "y que no se van a juntar")
 end)
 
 test("ctrl+u limpia la busqueda", function()
